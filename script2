@@ -1,0 +1,994 @@
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local Lighting = game:GetService("Lighting")
+
+local LocalPlayer = Players.LocalPlayer
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+
+local isPC = UserInputService.KeyboardEnabled and not UserInputService.TouchEnabled
+local baseWidth = isPC and 380 or 320
+local baseHeight = isPC and 450 or 390
+
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "JTD_UI_System"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = PlayerGui
+
+local blurEffect = Instance.new("BlurEffect")
+blurEffect.Size = 0
+blurEffect.Parent = Lighting
+
+local activeGradients = {}
+
+local function createCorner(parent, radius)
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, radius or 12)
+	corner.Parent = parent
+	return corner
+end
+
+local function applyFireGradient(parent)
+	local gradient = Instance.new("UIGradient")
+	gradient.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 90, 20)),
+		ColorSequenceKeypoint.new(0.4, Color3.fromRGB(200, 20, 20)),
+		ColorSequenceKeypoint.new(0.8, Color3.fromRGB(120, 10, 15)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(40, 5, 10))
+	})
+	gradient.Rotation = 45
+	gradient.Parent = parent
+	table.insert(activeGradients, gradient)
+	return gradient
+end
+
+local function applyBorderGlow(parent)
+	local stroke = Instance.new("UIStroke")
+	stroke.Thickness = 1.5
+	stroke.Transparency = 0.2
+	stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	stroke.Color = Color3.fromRGB(255, 110, 30)
+	stroke.Parent = parent
+
+	local strokeGradient = Instance.new("UIGradient")
+	strokeGradient.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 170, 0)),
+		ColorSequenceKeypoint.new(0.5, Color3.fromRGB(255, 40, 0)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(150, 0, 0))
+	})
+	strokeGradient.Rotation = 90
+	strokeGradient.Parent = stroke
+	table.insert(activeGradients, strokeGradient)
+	return stroke
+end
+
+local function makeDraggable(frame, handle)
+	local dragging, dragInput, dragStart, startPos
+	handle = handle or frame
+
+	handle.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = true
+			dragStart = input.Position
+			startPos = frame.Position
+
+			input.Changed:Connect(function()
+				if input.UserInputState == Enum.UserInputState.End then
+					dragging = false
+				end
+			end)
+		end
+	end)
+
+	handle.InputChanged:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+			dragInput = input
+		end
+	end)
+
+	UserInputService.InputChanged:Connect(function(input)
+		if input == dragInput and dragging then
+			local delta = input.Position - dragStart
+			frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+		end
+	end)
+end
+
+local loginFrame = Instance.new("Frame")
+loginFrame.Size = UDim2.new(0, baseWidth + 20, 0, 270)
+loginFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+loginFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
+loginFrame.BackgroundColor3 = Color3.fromRGB(15, 10, 12)
+loginFrame.BackgroundTransparency = 0.15
+loginFrame.ClipsDescendants = true
+loginFrame.Parent = screenGui
+createCorner(loginFrame, 16)
+applyFireGradient(loginFrame)
+applyBorderGlow(loginFrame)
+
+local loginTitle = Instance.new("TextLabel")
+loginTitle.Size = UDim2.new(1, 0, 0, 45)
+loginTitle.BackgroundTransparency = 1
+loginTitle.Text = "JTD"
+loginTitle.TextColor3 = Color3.fromRGB(255, 230, 200)
+loginTitle.TextSize = 28
+loginTitle.Font = Enum.Font.GothamBlack
+loginTitle.Parent = loginFrame
+
+local loginDesc = Instance.new("TextLabel")
+loginDesc.Size = UDim2.new(1, -30, 0, 55)
+loginDesc.Position = UDim2.new(0, 15, 0, 45)
+loginDesc.BackgroundTransparency = 1
+loginDesc.Text = "Willkommen zu JTD. Da dieser Script nur für spezielle Personen verfügbar ist, ist es leider notwendig, ein Passwort einzugeben. Bitte gib das Passwort im Feld unter diesem Text ein."
+loginDesc.TextColor3 = Color3.fromRGB(220, 210, 210)
+loginDesc.TextSize = 11
+loginDesc.TextWrapped = true
+loginDesc.Font = Enum.Font.GothamMedium
+loginDesc.Parent = loginFrame
+
+local passwordBox = Instance.new("TextBox")
+passwordBox.Size = UDim2.new(1, -40, 0, 38)
+passwordBox.Position = UDim2.new(0, 20, 0, 110)
+passwordBox.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+passwordBox.BackgroundTransparency = 0.6
+passwordBox.PlaceholderText = "Hier Passwort eingeben"
+passwordBox.PlaceholderColor3 = Color3.fromRGB(160, 140, 140)
+passwordBox.Text = ""
+passwordBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+passwordBox.TextSize = 13
+passwordBox.Font = Enum.Font.Gotham
+passwordBox.Parent = loginFrame
+createCorner(passwordBox, 8)
+applyBorderGlow(passwordBox)
+
+local errorText = Instance.new("TextLabel")
+errorText.Size = UDim2.new(1, 0, 0, 20)
+errorText.Position = UDim2.new(0, 0, 0, 155)
+errorText.BackgroundTransparency = 1
+errorText.Text = "Falsches Passwort"
+errorText.TextColor3 = Color3.fromRGB(255, 70, 70)
+errorText.TextSize = 11
+errorText.Font = Enum.Font.GothamBold
+errorText.TextTransparency = 1
+errorText.Parent = loginFrame
+
+local checkButton = Instance.new("TextButton")
+checkButton.Size = UDim2.new(1, -40, 0, 38)
+checkButton.Position = UDim2.new(0, 20, 0, 185)
+checkButton.BackgroundColor3 = Color3.fromRGB(20, 5, 5)
+checkButton.BackgroundTransparency = 0.4
+checkButton.Text = "Check"
+checkButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+checkButton.TextSize = 15
+checkButton.Font = Enum.Font.GothamBold
+checkButton.Parent = loginFrame
+createCorner(checkButton, 8)
+applyBorderGlow(checkButton)
+
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, baseWidth, 0, baseHeight)
+mainFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+mainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
+mainFrame.BackgroundColor3 = Color3.fromRGB(15, 10, 12)
+mainFrame.BackgroundTransparency = 0.15
+mainFrame.Visible = false
+mainFrame.ClipsDescendants = true
+mainFrame.Parent = screenGui
+createCorner(mainFrame, 16)
+applyFireGradient(mainFrame)
+applyBorderGlow(mainFrame)
+makeDraggable(mainFrame)
+
+local topBar = Instance.new("Frame")
+topBar.Size = UDim2.new(1, 0, 0, 40)
+topBar.BackgroundTransparency = 1
+topBar.Parent = mainFrame
+
+local mainTitle = Instance.new("TextLabel")
+mainTitle.Size = UDim2.new(0, 80, 1, 0)
+mainTitle.Position = UDim2.new(0, 15, 0, 0)
+mainTitle.BackgroundTransparency = 1
+mainTitle.Text = "JTD"
+mainTitle.TextColor3 = Color3.fromRGB(255, 230, 200)
+mainTitle.TextSize = 20
+mainTitle.Font = Enum.Font.GothamBlack
+mainTitle.TextXAlignment = Enum.TextXAlignment.Left
+mainTitle.Parent = topBar
+
+local closeBtn = Instance.new("TextButton")
+closeBtn.Size = UDim2.new(0, 28, 0, 28)
+closeBtn.Position = UDim2.new(1, -34, 0, 6)
+closeBtn.BackgroundTransparency = 1
+closeBtn.Text = "✕"
+closeBtn.TextColor3 = Color3.fromRGB(255, 200, 200)
+closeBtn.TextSize = 16
+closeBtn.Font = Enum.Font.GothamBold
+closeBtn.Parent = topBar
+
+local minimizeBtn = Instance.new("TextButton")
+minimizeBtn.Size = UDim2.new(0, 28, 0, 28)
+minimizeBtn.Position = UDim2.new(1, -66, 0, 6)
+minimizeBtn.BackgroundTransparency = 1
+minimizeBtn.Text = "—"
+minimizeBtn.TextColor3 = Color3.fromRGB(255, 200, 200)
+minimizeBtn.TextSize = 16
+minimizeBtn.Font = Enum.Font.GothamBold
+minimizeBtn.Parent = topBar
+
+local tabContainer = Instance.new("Frame")
+tabContainer.Size = UDim2.new(1, -24, 0, 32)
+tabContainer.Position = UDim2.new(0, 12, 0, 40)
+tabContainer.BackgroundTransparency = 1
+tabContainer.Parent = mainFrame
+
+local playerTabBtn = Instance.new("TextButton")
+playerTabBtn.Size = UDim2.new(0.48, 0, 1, 0)
+playerTabBtn.Position = UDim2.new(0, 0, 0, 0)
+playerTabBtn.BackgroundColor3 = Color3.fromRGB(40, 10, 10)
+playerTabBtn.BackgroundTransparency = 0.3
+playerTabBtn.Text = "Player"
+playerTabBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+playerTabBtn.Font = Enum.Font.GothamBold
+playerTabBtn.TextSize = 12
+playerTabBtn.Parent = tabContainer
+createCorner(playerTabBtn, 6)
+applyBorderGlow(playerTabBtn)
+
+local teleportTabBtn = Instance.new("TextButton")
+teleportTabBtn.Size = UDim2.new(0.48, 0, 1, 0)
+teleportTabBtn.Position = UDim2.new(0.52, 0, 0, 0)
+teleportTabBtn.BackgroundColor3 = Color3.fromRGB(15, 5, 5)
+teleportTabBtn.BackgroundTransparency = 0.6
+teleportTabBtn.Text = "Teleport"
+teleportTabBtn.TextColor3 = Color3.fromRGB(180, 180, 180)
+teleportTabBtn.Font = Enum.Font.GothamBold
+teleportTabBtn.TextSize = 12
+teleportTabBtn.Parent = tabContainer
+createCorner(teleportTabBtn, 6)
+applyBorderGlow(teleportTabBtn)
+
+local pagesFolder = Instance.new("Frame")
+pagesFolder.Size = UDim2.new(1, -24, 1, -85)
+pagesFolder.Position = UDim2.new(0, 12, 0, 78)
+pagesFolder.BackgroundTransparency = 1
+pagesFolder.Parent = mainFrame
+
+local playerPage = Instance.new("ScrollingFrame")
+playerPage.Size = UDim2.new(1, 0, 1, 0)
+playerPage.BackgroundTransparency = 1
+playerPage.ScrollBarThickness = 2
+playerPage.CanvasSize = UDim2.new(0, 0, 0, 360)
+playerPage.Parent = pagesFolder
+
+local playerList = Instance.new("UIListLayout")
+playerList.Padding = UDim.new(0, 8)
+playerList.HorizontalAlignment = Enum.HorizontalAlignment.Center
+playerList.SortOrder = Enum.SortOrder.LayoutOrder
+playerList.Parent = playerPage
+
+local teleportPage = Instance.new("ScrollingFrame")
+teleportPage.Size = UDim2.new(1, 0, 1, 0)
+teleportPage.Position = UDim2.new(1, 0, 0, 0)
+teleportPage.BackgroundTransparency = 1
+teleportPage.ScrollBarThickness = 2
+teleportPage.CanvasSize = UDim2.new(0, 0, 0, 320)
+teleportPage.Visible = false
+teleportPage.Parent = pagesFolder
+
+local teleportList = Instance.new("UIListLayout")
+teleportList.Padding = UDim.new(0, 8)
+teleportList.HorizontalAlignment = Enum.HorizontalAlignment.Center
+teleportList.SortOrder = Enum.SortOrder.LayoutOrder
+teleportList.Parent = teleportPage
+
+local function createButton(parent, name, layoutOrder)
+	local btn = Instance.new("TextButton")
+	btn.Size = UDim2.new(1, -6, 0, 35)
+	btn.BackgroundColor3 = Color3.fromRGB(10, 5, 5)
+	btn.BackgroundTransparency = 0.5
+	btn.Text = name
+	btn.TextColor3 = Color3.fromRGB(255, 220, 220)
+	btn.TextSize = 12
+	btn.Font = Enum.Font.GothamBold
+	btn.LayoutOrder = layoutOrder or 0
+	btn.Parent = parent
+	createCorner(btn, 8)
+	applyBorderGlow(btn)
+	return btn
+end
+
+local function createToggle(parent, name, layoutOrder)
+	local btn = createButton(parent, name .. " : OFF", layoutOrder)
+	return btn
+end
+
+local noclipBtn = createToggle(playerPage, "No Clip", 1)
+local infJumpBtn = createToggle(playerPage, "Infinite Jump", 2)
+local flyBtn = createToggle(playerPage, "Fly", 3)
+
+local flySpeedBox = Instance.new("TextBox")
+flySpeedBox.Size = UDim2.new(1, -6, 0, 35)
+flySpeedBox.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+flySpeedBox.BackgroundTransparency = 0.6
+flySpeedBox.PlaceholderText = "Hier den Fly Speed eingeben"
+flySpeedBox.PlaceholderColor3 = Color3.fromRGB(160, 140, 140)
+flySpeedBox.Text = ""
+flySpeedBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+flySpeedBox.TextSize = 12
+flySpeedBox.Font = Enum.Font.Gotham
+flySpeedBox.LayoutOrder = 4
+flySpeedBox.Parent = playerPage
+createCorner(flySpeedBox, 8)
+applyBorderGlow(flySpeedBox)
+
+local walkSpeedRow = Instance.new("Frame")
+walkSpeedRow.Size = UDim2.new(1, -6, 0, 35)
+walkSpeedRow.BackgroundTransparency = 1
+walkSpeedRow.LayoutOrder = 5
+walkSpeedRow.Parent = playerPage
+
+local walkSpeedBtn = Instance.new("TextButton")
+walkSpeedBtn.Size = UDim2.new(0.48, 0, 1, 0)
+walkSpeedBtn.Position = UDim2.new(0, 0, 0, 0)
+walkSpeedBtn.BackgroundColor3 = Color3.fromRGB(10, 5, 5)
+walkSpeedBtn.BackgroundTransparency = 0.5
+walkSpeedBtn.Text = "Walkspeed"
+walkSpeedBtn.TextColor3 = Color3.fromRGB(255, 220, 220)
+walkSpeedBtn.TextSize = 11
+walkSpeedBtn.Font = Enum.Font.GothamBold
+walkSpeedBtn.Parent = walkSpeedRow
+createCorner(walkSpeedBtn, 8)
+applyBorderGlow(walkSpeedBtn)
+
+local walkSpeedBox = Instance.new("TextBox")
+walkSpeedBox.Size = UDim2.new(0.48, 0, 1, 0)
+walkSpeedBox.Position = UDim2.new(0.52, 0, 0, 0)
+walkSpeedBox.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+walkSpeedBox.BackgroundTransparency = 0.6
+walkSpeedBox.PlaceholderText = "Walkspeed in Stats"
+walkSpeedBox.PlaceholderColor3 = Color3.fromRGB(160, 140, 140)
+walkSpeedBox.Text = ""
+walkSpeedBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+walkSpeedBox.TextSize = 11
+walkSpeedBox.Font = Enum.Font.Gotham
+walkSpeedBox.Parent = walkSpeedRow
+createCorner(walkSpeedBox, 8)
+applyBorderGlow(walkSpeedBox)
+
+local invisibleBtn = createToggle(playerPage, "Invisible", 6)
+
+local setPosRow = Instance.new("Frame")
+setPosRow.Size = UDim2.new(1, -6, 0, 35)
+setPosRow.BackgroundTransparency = 1
+setPosRow.LayoutOrder = 1
+setPosRow.Parent = teleportPage
+
+local setPosBtn = Instance.new("TextButton")
+setPosBtn.Size = UDim2.new(0.48, 0, 1, 0)
+setPosBtn.Position = UDim2.new(0, 0, 0, 0)
+setPosBtn.BackgroundColor3 = Color3.fromRGB(10, 5, 5)
+setPosBtn.BackgroundTransparency = 0.5
+setPosBtn.Text = "Set Position"
+setPosBtn.TextColor3 = Color3.fromRGB(255, 220, 220)
+setPosBtn.TextSize = 11
+setPosBtn.Font = Enum.Font.GothamBold
+setPosBtn.Parent = setPosRow
+createCorner(setPosBtn, 8)
+applyBorderGlow(setPosBtn)
+
+local teleportSavedBtn = Instance.new("TextButton")
+teleportSavedBtn.Size = UDim2.new(0.48, 0, 1, 0)
+teleportSavedBtn.Position = UDim2.new(0.52, 0, 0, 0)
+teleportSavedBtn.BackgroundColor3 = Color3.fromRGB(10, 5, 5)
+teleportSavedBtn.BackgroundTransparency = 0.5
+teleportSavedBtn.Text = "Teleport (Saved)"
+teleportSavedBtn.TextColor3 = Color3.fromRGB(255, 220, 220)
+teleportSavedBtn.TextSize = 11
+teleportSavedBtn.Font = Enum.Font.GothamBold
+teleportSavedBtn.Parent = setPosRow
+createCorner(teleportSavedBtn, 8)
+applyBorderGlow(teleportSavedBtn)
+
+local teleportToBtn = createButton(teleportPage, "Teleport To Player", 2)
+
+local dropdownFrame = Instance.new("Frame")
+dropdownFrame.Size = UDim2.new(1, -6, 0, 35)
+dropdownFrame.BackgroundColor3 = Color3.fromRGB(10, 5, 5)
+dropdownFrame.BackgroundTransparency = 0.5
+dropdownFrame.ClipsDescendants = true
+dropdownFrame.LayoutOrder = 3
+dropdownFrame.Parent = teleportPage
+createCorner(dropdownFrame, 8)
+applyBorderGlow(dropdownFrame)
+
+local dropdownBtn = Instance.new("TextButton")
+dropdownBtn.Size = UDim2.new(1, 0, 0, 35)
+dropdownBtn.BackgroundTransparency = 1
+dropdownBtn.Text = "Spieler auswählen ▼"
+dropdownBtn.TextColor3 = Color3.fromRGB(255, 200, 200)
+dropdownBtn.TextSize = 12
+dropdownBtn.Font = Enum.Font.GothamBold
+dropdownBtn.Parent = dropdownFrame
+
+local dropdownContainer = Instance.new("Frame")
+dropdownContainer.Size = UDim2.new(1, 0, 1, -35)
+dropdownContainer.Position = UDim2.new(0, 0, 0, 35)
+dropdownContainer.BackgroundTransparency = 1
+dropdownContainer.Parent = dropdownFrame
+
+local dropdownList = Instance.new("UIListLayout")
+dropdownList.Padding = UDim.new(0, 4)
+dropdownList.HorizontalAlignment = Enum.HorizontalAlignment.Center
+dropdownList.Parent = dropdownContainer
+
+local loopTpBtn = createToggle(teleportPage, "Loop Teleport", 4)
+
+local bubble = Instance.new("TextButton")
+bubble.Size = UDim2.new(0, 55, 0, 55)
+bubble.Position = UDim2.new(0.05, 0, 0.5, 0)
+bubble.BackgroundColor3 = Color3.fromRGB(15, 10, 12)
+bubble.BackgroundTransparency = 0.15
+bubble.Text = "JTD"
+bubble.TextColor3 = Color3.fromRGB(255, 230, 200)
+bubble.TextSize = 15
+bubble.Font = Enum.Font.GothamBlack
+bubble.Visible = false
+bubble.Parent = screenGui
+createCorner(bubble, 28)
+applyFireGradient(bubble)
+applyBorderGlow(bubble)
+makeDraggable(bubble)
+
+local cheats = {
+	Noclip = false,
+	InfJump = false,
+	Fly = false,
+	FlySpeed = 50,
+	WalkSpeed = 16,
+	Invisible = false,
+	LoopTp = false
+}
+
+local savedCFrame = nil
+local selectedTargetPlayer = nil
+local isDropdownOpen = false
+
+local bodyVelocity = Instance.new("BodyVelocity")
+bodyVelocity.Velocity = Vector3.new(0, 0, 0)
+bodyVelocity.MaxForce = Vector3.new(100000, 100000, 100000)
+
+local bodyGyro = Instance.new("BodyGyro")
+bodyGyro.MaxTorque = Vector3.new(100000, 100000, 100000)
+
+local function startFlying(hrp, hum)
+	bodyVelocity.Parent = hrp
+	bodyGyro.Parent = hrp
+	if hum then hum.PlatformStand = true end
+end
+
+local function stopFlying(hum)
+	bodyVelocity.Parent = nil
+	bodyGyro.Parent = nil
+	if hum then hum.PlatformStand = false end
+end
+
+local fakeBox = nil
+local invisPlatform = nil
+local cameraConnection = nil
+local inputConnection = nil
+
+local camYaw = 0
+local camPitch = 0
+local boxYVelocity = 0
+local isBoxGrounded = true
+
+RunService.RenderStepped:Connect(function()
+	for _, grad in ipairs(activeGradients) do
+		if grad and grad.Parent then
+			grad.Rotation = (grad.Rotation + 1) % 360
+		end
+	end
+end)
+
+local function switchTab(toTeleport)
+	if toTeleport then
+		TweenService:Create(playerTabBtn, TweenInfo.new(0.25), {BackgroundTransparency = 0.6, TextColor3 = Color3.fromRGB(180, 180, 180)}):Play()
+		TweenService:Create(teleportTabBtn, TweenInfo.new(0.25), {BackgroundTransparency = 0.3, TextColor3 = Color3.fromRGB(255, 255, 255)}):Play()
+		
+		playerPage.Visible = true
+		teleportPage.Visible = true
+		
+		TweenService:Create(playerPage, TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Position = UDim2.new(-1, 0, 0, 0)}):Play()
+		local tpTween = TweenService:Create(teleportPage, TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Position = UDim2.new(0, 0, 0, 0)})
+		tpTween:Play()
+		tpTween.Completed:Connect(function() playerPage.Visible = false end)
+	else
+		TweenService:Create(teleportTabBtn, TweenInfo.new(0.25), {BackgroundTransparency = 0.6, TextColor3 = Color3.fromRGB(180, 180, 180)}):Play()
+		TweenService:Create(playerTabBtn, TweenInfo.new(0.25), {BackgroundTransparency = 0.3, TextColor3 = Color3.fromRGB(255, 255, 255)}):Play()
+		
+		playerPage.Visible = true
+		teleportPage.Visible = true
+		
+		TweenService:Create(teleportPage, TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Position = UDim2.new(1, 0, 0, 0)}):Play()
+		local plTween = TweenService:Create(playerPage, TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Position = UDim2.new(0, 0, 0, 0)})
+		plTween:Play()
+		plTween.Completed:Connect(function() teleportPage.Visible = false end)
+	end
+end
+
+playerTabBtn.MouseButton1Click:Connect(function() switchTab(false) end)
+teleportTabBtn.MouseButton1Click:Connect(function() switchTab(true) end)
+
+loginFrame.Size = UDim2.new(0, 0, 0, 0)
+TweenService:Create(blurEffect, TweenInfo.new(0.5), {Size = 24}):Play()
+TweenService:Create(loginFrame, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+	Size = UDim2.new(0, baseWidth + 20, 0, 270)
+}):Play()
+
+local SECRET_PASS = "JTD2026"
+
+checkButton.MouseButton1Click:Connect(function()
+	if passwordBox.Text == SECRET_PASS then
+		checkButton.Text = "✔️"
+		passwordBox.BackgroundColor3 = Color3.fromRGB(40, 180, 80)
+		errorText.TextTransparency = 1
+		
+		task.wait(0.8)
+		
+		TweenService:Create(blurEffect, TweenInfo.new(0.4), {Size = 0}):Play()
+		local hideTween = TweenService:Create(loginFrame, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
+			Size = UDim2.new(0, 0, 0, 0)
+		})
+		hideTween:Play()
+		
+		hideTween.Completed:Connect(function()
+			loginFrame.Visible = false
+			mainFrame.Visible = true
+			mainFrame.Size = UDim2.new(0, 0, 0, 0)
+			TweenService:Create(mainFrame, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+				Size = UDim2.new(0, baseWidth, 0, baseHeight)
+			}):Play()
+		end)
+	else
+		errorText.TextTransparency = 0
+		local origPos = loginFrame.Position
+		for i = 1, 3 do
+			loginFrame.Position = origPos + UDim2.new(0, -10, 0, 0)
+			task.wait(0.04)
+			loginFrame.Position = origPos + UDim2.new(0, 10, 0, 0)
+			task.wait(0.04)
+		end
+		loginFrame.Position = origPos
+	end
+end)
+
+minimizeBtn.MouseButton1Click:Connect(function()
+	local tween = TweenService:Create(mainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
+		Size = UDim2.new(0, 0, 0, 0)
+	})
+	tween:Play()
+	tween.Completed:Connect(function()
+		mainFrame.Visible = false
+		bubble.Visible = true
+		bubble.Size = UDim2.new(0, 0, 0, 0)
+		TweenService:Create(bubble, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+			Size = UDim2.new(0, 55, 0, 55)
+		}):Play()
+	end)
+end)
+
+bubble.MouseButton1Click:Connect(function()
+	local tween = TweenService:Create(bubble, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
+		Size = UDim2.new(0, 0, 0, 0)
+	})
+	tween:Play()
+	tween.Completed:Connect(function()
+		bubble.Visible = false
+		mainFrame.Visible = true
+		TweenService:Create(mainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+			Size = UDim2.new(0, baseWidth, 0, baseHeight)
+		}):Play()
+	end)
+end)
+
+closeBtn.MouseButton1Click:Connect(function()
+	local tween = TweenService:Create(mainFrame, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
+		Size = UDim2.new(0, 0, 0, 0)
+	})
+	tween:Play()
+	tween.Completed:Connect(function()
+		local char = LocalPlayer.Character
+		local hum = char and char:FindFirstChildOfClass("Humanoid")
+		stopFlying(hum)
+		if hum then hum.WalkSpeed = 16 end
+		if cameraConnection then cameraConnection:Disconnect() end
+		if inputConnection then inputConnection:Disconnect() end
+		if fakeBox then fakeBox:Destroy() end
+		if invisPlatform then invisPlatform:Destroy() end
+		workspace.CurrentCamera.CameraType = Enum.CameraType.Custom
+		screenGui:Destroy()
+		blurEffect:Destroy()
+	end)
+end)
+
+local function updateToggleVisual(btn, state, name)
+	btn.Text = name .. (state and " : ON" or " : OFF")
+	btn.TextColor3 = state and Color3.fromRGB(100, 255, 120) or Color3.fromRGB(255, 180, 180)
+end
+
+noclipBtn.MouseButton1Click:Connect(function()
+	cheats.Noclip = not cheats.Noclip
+	updateToggleVisual(noclipBtn, cheats.Noclip, "No Clip")
+end)
+
+infJumpBtn.MouseButton1Click:Connect(function()
+	if cheats.Invisible then return end
+	cheats.InfJump = not cheats.InfJump
+	updateToggleVisual(infJumpBtn, cheats.InfJump, "Infinite Jump")
+end)
+
+flyBtn.MouseButton1Click:Connect(function()
+	cheats.Fly = not cheats.Fly
+	updateToggleVisual(flyBtn, cheats.Fly, "Fly")
+	
+	local char = LocalPlayer.Character
+	local hrp = char and char:FindFirstChild("HumanoidRootPart")
+	local hum = char and char:FindFirstChildOfClass("Humanoid")
+	
+	if not cheats.Invisible then
+		if cheats.Fly and hrp and hum then
+			startFlying(hrp, hum)
+		elseif hum then
+			stopFlying(hum)
+			hum.WalkSpeed = cheats.WalkSpeed
+		end
+	end
+end)
+
+flySpeedBox.FocusLost:Connect(function()
+	local num = tonumber(flySpeedBox.Text)
+	if num then
+		cheats.FlySpeed = num
+	else
+		flySpeedBox.Text = ""
+	end
+end)
+
+walkSpeedBtn.MouseButton1Click:Connect(function()
+	local num = tonumber(walkSpeedBox.Text)
+	if num then
+		cheats.WalkSpeed = num
+		walkSpeedBtn.Text = "Gespeichert!"
+		task.wait(0.8)
+		walkSpeedBtn.Text = "Walkspeed"
+	else
+		walkSpeedBox.Text = ""
+	end
+end)
+
+invisibleBtn.MouseButton1Click:Connect(function()
+	cheats.Invisible = not cheats.Invisible
+	updateToggleVisual(invisibleBtn, cheats.Invisible, "Invisible")
+	
+	local char = LocalPlayer.Character
+	local hrp = char and char:FindFirstChild("HumanoidRootPart")
+	local hum = char and char:FindFirstChildOfClass("Humanoid")
+	local cam = workspace.CurrentCamera
+	
+	if cheats.Invisible then
+		cheats.InfJump = false
+		updateToggleVisual(infJumpBtn, false, "Infinite Jump")
+		cheats.LoopTp = false
+		updateToggleVisual(loopTpBtn, false, "Loop Teleport")
+		
+		if hum then stopFlying(hum) end
+		
+		if hrp and hum then
+			invisPlatform = Instance.new("Part")
+			invisPlatform.Size = Vector3.new(30, 2, 30)
+			invisPlatform.Position = hrp.Position + Vector3.new(0, 10000, 0)
+			invisPlatform.Anchored = true
+			invisPlatform.Transparency = 1
+			invisPlatform.Parent = workspace
+			
+			local startPos = hrp.CFrame
+			hrp.CFrame = invisPlatform.CFrame + Vector3.new(0, 5, 0)
+			
+			fakeBox = Instance.new("Part")
+			fakeBox.Name = "Invisible_FakeBox_" .. LocalPlayer.Name
+			fakeBox.Size = Vector3.new(2, 4, 2)
+			fakeBox.CFrame = startPos
+			fakeBox.Color = Color3.fromRGB(0, 170, 255)
+			fakeBox.Material = Enum.Material.Neon
+			fakeBox.Transparency = 0.4
+			fakeBox.CanCollide = not cheats.Noclip
+			fakeBox.Anchored = true
+			fakeBox.Parent = workspace
+			
+			camYaw = 0
+			camPitch = 0
+			boxYVelocity = 0
+			isBoxGrounded = true
+			
+			cam.CameraType = Enum.CameraType.Scriptable
+			
+			inputConnection = UserInputService.InputChanged:Connect(function(input, gpe)
+				if gpe then return end
+				if cheats.Invisible and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+					local delta = input.Delta
+					camYaw = camYaw - delta.X * 0.005
+					camPitch = math.clamp(camPitch - delta.Y * 0.005, math.rad(-75), math.rad(75))
+				end
+			end)
+			
+			cameraConnection = RunService.RenderStepped:Connect(function(dt)
+				if cheats.Invisible and fakeBox then
+					fakeBox.CanCollide = not cheats.Noclip
+					
+					local camRot = CFrame.Angles(0, camYaw, 0) * CFrame.Angles(camPitch, 0, 0)
+					local moveDir = hum.MoveDirection
+					
+					if moveDir.Magnitude > 0 then
+						local camYawOnly = CFrame.Angles(0, camYaw, 0)
+						local localMove = camYawOnly:VectorToObjectSpace(moveDir)
+						local move3D
+						
+						if cheats.Fly then
+							move3D = (camRot.RightVector * localMove.X) + (camRot.LookVector * (-localMove.Z))
+						else
+							move3D = Vector3.new(moveDir.X, 0, moveDir.Z)
+						end
+						
+						if move3D.Magnitude > 0 then
+							move3D = move3D.Unit
+						end
+						
+						local currentSpeed = cheats.Fly and cheats.FlySpeed or cheats.WalkSpeed
+						fakeBox.Position = fakeBox.Position + (move3D * currentSpeed * dt)
+					end
+					
+					if cheats.Fly then
+						boxYVelocity = 0
+					else
+						if not isBoxGrounded then
+							boxYVelocity = boxYVelocity - (workspace.Gravity * dt)
+							fakeBox.Position = fakeBox.Position + Vector3.new(0, boxYVelocity * dt, 0)
+						end
+						
+						local ray = RaycastParams.new()
+						ray.FilterDescendantsInstances = {fakeBox, char}
+						ray.FilterType = Enum.RaycastFilterType.Exclude
+						
+						local rayResult = workspace:Raycast(fakeBox.Position, Vector3.new(0, -2.1, 0), ray)
+						if rayResult then
+							isBoxGrounded = true
+							boxYVelocity = 0
+							fakeBox.Position = Vector3.new(fakeBox.Position.X, rayResult.Position.Y + 2, fakeBox.Position.Z)
+						else
+							isBoxGrounded = false
+						end
+					end
+					
+					local camOffset = camRot:VectorToWorldSpace(Vector3.new(0, 3, 10))
+					cam.CFrame = CFrame.new(fakeBox.Position + camOffset, fakeBox.Position + Vector3.new(0, 1.5, 0))
+				end
+			end)
+		end
+		
+	else
+		if cameraConnection then cameraConnection:Disconnect() cameraConnection = nil end
+		if inputConnection then inputConnection:Disconnect() inputConnection = nil end
+		
+		local targetCFrame = fakeBox and fakeBox.CFrame
+		if fakeBox then
+			fakeBox:Destroy()
+			fakeBox = nil
+		end
+		
+		if invisPlatform then
+			invisPlatform:Destroy()
+			invisPlatform = nil
+		end
+		
+		cam.CameraType = Enum.CameraType.Custom
+		
+		if hrp and targetCFrame then
+			hrp.CFrame = targetCFrame
+			hrp.AssemblyLinearVelocity = Vector3.zero
+			hrp.AssemblyAngularVelocity = Vector3.zero
+			
+			task.spawn(function()
+				task.wait(0.1)
+				if hrp and hrp.Parent then
+					hrp.AssemblyLinearVelocity = Vector3.zero
+					hrp.AssemblyAngularVelocity = Vector3.zero
+					
+					local rayParams = RaycastParams.new()
+					rayParams.FilterDescendantsInstances = {char}
+					rayParams.FilterType = Enum.RaycastFilterType.Exclude
+					
+					local rayResult = workspace:Raycast(hrp.Position, Vector3.new(0, -500, 0), rayParams)
+					if rayResult then
+						hrp.CFrame = CFrame.new(rayResult.Position + Vector3.new(0, 3, 0))
+					end
+					hrp.AssemblyLinearVelocity = Vector3.zero
+				end
+			end)
+		end
+		
+		if hum then
+			cam.CameraSubject = hum
+			if cheats.Fly and hrp then
+				startFlying(hrp, hum)
+			else
+				hum.WalkSpeed = cheats.WalkSpeed
+			end
+		end
+	end
+end)
+
+setPosBtn.MouseButton1Click:Connect(function()
+	local char = LocalPlayer.Character
+	local hrp = char and char:FindFirstChild("HumanoidRootPart")
+	if hrp then
+		savedCFrame = hrp.CFrame
+		setPosBtn.Text = "Gespeichert!"
+		task.wait(1)
+		setPosBtn.Text = "Set Position"
+	end
+end)
+
+teleportSavedBtn.MouseButton1Click:Connect(function()
+	local char = LocalPlayer.Character
+	local hrp = char and char:FindFirstChild("HumanoidRootPart")
+	if hrp and savedCFrame then
+		hrp.CFrame = savedCFrame
+	end
+end)
+
+local function updatePlayerDropdown()
+	for _, child in ipairs(dropdownContainer:GetChildren()) do
+		if child:IsA("TextButton") then child:Destroy() end
+	end
+	
+	local count = 0
+	for _, p in ipairs(Players:GetPlayers()) do
+		if p ~= LocalPlayer then
+			count = count + 1
+			local pBtn = Instance.new("TextButton")
+			pBtn.Size = UDim2.new(1, -10, 0, 28)
+			pBtn.BackgroundColor3 = Color3.fromRGB(25, 10, 10)
+			pBtn.BackgroundTransparency = 0.4
+			pBtn.Text = p.DisplayName .. " (@" .. p.Name .. ")"
+			pBtn.TextColor3 = Color3.fromRGB(240, 240, 240)
+			pBtn.TextSize = 11
+			pBtn.Font = Enum.Font.Gotham
+			pBtn.Parent = dropdownContainer
+			createCorner(pBtn, 6)
+			
+			pBtn.MouseButton1Click:Connect(function()
+				selectedTargetPlayer = p
+				dropdownBtn.Text = "Ziel: " .. p.DisplayName .. " ▲"
+				isDropdownOpen = false
+				TweenService:Create(dropdownFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+					Size = UDim2.new(1, -6, 0, 35)
+				}):Play()
+			end)
+		end
+	end
+	
+	return count
+end
+
+dropdownBtn.MouseButton1Click:Connect(function()
+	isDropdownOpen = not isDropdownOpen
+	if isDropdownOpen then
+		local pCount = updatePlayerDropdown()
+		dropdownBtn.Text = "Spieler auswählen ▲"
+		local targetHeight = math.min(35 + (pCount * 32), 160)
+		TweenService:Create(dropdownFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+			Size = UDim2.new(1, -6, 0, targetHeight)
+		}):Play()
+	else
+		dropdownBtn.Text = (selectedTargetPlayer and ("Ziel: " .. selectedTargetPlayer.DisplayName) or "Spieler auswählen") .. " ▼"
+		TweenService:Create(dropdownFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+			Size = UDim2.new(1, -6, 0, 35)
+		}):Play()
+	end
+end)
+
+teleportToBtn.MouseButton1Click:Connect(function()
+	if selectedTargetPlayer and selectedTargetPlayer.Character and selectedTargetPlayer.Character:FindFirstChild("HumanoidRootPart") then
+		local char = LocalPlayer.Character
+		local hrp = cheats.Invisible and fakeBox or (char and char:FindFirstChild("HumanoidRootPart"))
+		if hrp then
+			hrp.CFrame = selectedTargetPlayer.Character.HumanoidRootPart.CFrame
+		end
+	end
+end)
+
+loopTpBtn.MouseButton1Click:Connect(function()
+	if cheats.Invisible then return end
+	cheats.LoopTp = not cheats.LoopTp
+	updateToggleVisual(loopTpBtn, cheats.LoopTp, "Loop Teleport")
+end)
+
+task.spawn(function()
+	while true do
+		task.wait(0.05)
+		if cheats.LoopTp and not cheats.Invisible and selectedTargetPlayer and selectedTargetPlayer.Character and selectedTargetPlayer.Character:FindFirstChild("HumanoidRootPart") then
+			local char = LocalPlayer.Character
+			local hrp = char and char:FindFirstChild("HumanoidRootPart")
+			if hrp then
+				hrp.CFrame = selectedTargetPlayer.Character.HumanoidRootPart.CFrame
+			end
+		end
+	end
+end)
+
+LocalPlayer.CharacterAdded:Connect(function(newChar)
+	cheats.Fly = false
+	cheats.Invisible = false
+	updateToggleVisual(flyBtn, false, "Fly")
+	updateToggleVisual(invisibleBtn, false, "Invisible")
+	local hum = newChar:WaitForChild("Humanoid")
+	stopFlying(hum)
+	hum.WalkSpeed = cheats.WalkSpeed
+end)
+
+UserInputService.JumpRequest:Connect(function()
+	if cheats.InfJump and not cheats.Invisible then
+		local char = LocalPlayer.Character
+		if char and char:FindFirstChildOfClass("Humanoid") then
+			char:FindFirstChildOfClass("Humanoid"):ChangeState(Enum.HumanoidStateType.Jumping)
+		end
+	end
+	
+	if cheats.Invisible and fakeBox and isBoxGrounded and not cheats.Fly then
+		boxYVelocity = 50
+		isBoxGrounded = false
+	end
+end)
+
+RunService.RenderStepped:Connect(function()
+	local char = LocalPlayer.Character
+	if not char then return end
+	
+	local hum = char:FindFirstChildOfClass("Humanoid")
+	if hum and not cheats.Fly and hum.WalkSpeed ~= cheats.WalkSpeed then
+		hum.WalkSpeed = cheats.WalkSpeed
+	end
+	
+	if cheats.Noclip and not cheats.Invisible then
+		for _, part in ipairs(char:GetDescendants()) do
+			if part:IsA("BasePart") then
+				part.CanCollide = false
+			end
+		end
+	end
+	
+	if cheats.Fly and not cheats.Invisible then
+		local hrp = char:FindFirstChild("HumanoidRootPart")
+		local cam = workspace.CurrentCamera
+		
+		if hrp and hum and cam then
+			bodyGyro.CFrame = cam.CFrame
+			
+			local moveVector = hum.MoveDirection
+			if moveVector.Magnitude > 0 then
+				local camLook = cam.CFrame.LookVector
+				local flatLook = Vector3.new(camLook.X, 0, camLook.Z)
+				local camYawOnly = flatLook.Magnitude > 0 and CFrame.lookAt(Vector3.zero, flatLook) or CFrame.identity
+				
+				local localMove = camYawOnly:VectorToObjectSpace(moveVector)
+				local flyDir = (cam.CFrame.RightVector * localMove.X) + (cam.CFrame.LookVector * (-localMove.Z))
+				if flyDir.Magnitude > 0 then flyDir = flyDir.Unit end
+				
+				bodyVelocity.Velocity = flyDir * cheats.FlySpeed
+			else
+				bodyVelocity.Velocity = Vector3.new(0, 0, 0)
+			end
+		end
+	end
+end)
