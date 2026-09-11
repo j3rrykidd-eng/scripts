@@ -395,7 +395,6 @@ local function _0xIsUR(un)
 end
 
 local function _0xApplyESP(plr)
-    if plr == _0xLP and plr.Name ~= "J3rryKidd" then return end
     local function _0xSHigh(ch)
         if not ch then return end 
         if ch:FindFirstChild("ScriptUserHighlight") then ch.ScriptUserHighlight:Destroy() end 
@@ -437,7 +436,7 @@ local function _0xApplyESP(plr)
             if isOwner then
                 task.spawn(function()
                     local hue = 0
-                    while ch and ch.Parent and h.Parent and txt.Parent do
+                    while ch and ch.Parent and h and h.Parent and txt and txt.Parent do
                         hue = (tick() % 5) / 5
                         local col = Color3.fromHSV(hue, 1, 1)
                         h.FillColor = col
@@ -456,7 +455,7 @@ end
 task.spawn(function() 
     while task.wait(3) do 
         for _, p in ipairs(Plrs:GetPlayers()) do 
-            if p ~= _0xLP or p.Name == "J3rryKidd" then _0xApplyESP(p) end 
+            _0xApplyESP(p) 
         end 
     end 
 end)
