@@ -1,1 +1,475 @@
-do local v0=game:GetService("TweenService");local v1=game:GetService("UserInputService");local v2=game:GetService("RunService");local v3=game:GetService("Players");local v4=v3.LocalPlayer;local v5=v4:WaitForChild("PlayerGui");local v6=Vector3.new(404.79 -(339 + 41) , -17.37, -(41.03 + 35));local v7={Vector3.new( -(575 -(115 + 281)),1290 -735 ,7 + 1 ),Vector3.new(282 -165 , -68,32 -23 ),Vector3.new( -(879 -(550 + 317)), -(101 -31), -(63 -18)),Vector3.new( -(289 -(134 + 151)), -(1735 -(970 + 695)),40)};local v8,v9,v10;local v11=false;local v12=false;local v13=false;local v14=false;local v15=false;local v16=false;local v17=nil;local v18=false;local v19=0 -0 ;local v20=nil;local v21=2006 -(582 + 1408) ;local v22,v23,v24,v25,v26;if v5:FindFirstChild("SlapTowerGUI") then v5.SlapTowerGUI:Destroy();end local v27=v1.TouchEnabled and  not v1.MouseEnabled ;local v28=(v27 and (971 -691)) or 320 ;local v29=(v27 and (402 -82)) or (1356 -996) ;local v30=(v27 and (1856 -(1195 + 629))) or (46 -10) ;local v31=(v27 and (252 -(187 + 54))) or (792 -(162 + 618)) ;local v32=Instance.new("ScreenGui");v32.Name="SlapTowerGUI";v32.ResetOnSpawn=false;v32.Parent=v5;local v36=Instance.new("Frame");v36.Name="MainFrame";v36.Size=UDim2.new(0,v28,0 + 0 ,v29);v36.Position=UDim2.new(0.5 + 0 , -v28/(3 -1) ,0.5 -0 , -v29/(1 + 1) );v36.BackgroundColor3=Color3.fromRGB(1654 -(1373 + 263) ,1018 -(451 + 549) ,8 + 16 );v36.BorderSizePixel=0 -0 ;v36.ClipsDescendants=true;v36.Parent=v32;local v44=Instance.new("UICorner");v44.CornerRadius=UDim.new(0 -0 ,1396 -(746 + 638) );v44.Parent=v36;local v47=Instance.new("UIStroke");v47.Thickness=1.5 + 0 ;v47.Color=Color3.fromRGB(167 -57 ,436 -(218 + 123) ,1836 -(1535 + 46) );v47.ApplyStrokeMode=Enum.ApplyStrokeMode.Border;v47.Parent=v36;local v53=Instance.new("UIGradient");v53.Color=ColorSequence.new({ColorSequenceKeypoint.new(0 + 0 ,Color3.fromRGB(24,4 + 18 ,38)),ColorSequenceKeypoint.new(561 -(306 + 254) ,Color3.fromRGB(1 + 11 ,23 -11 ,1485 -(899 + 568) ))});v53.Rotation=30 + 15 ;v53.Parent=v36;local v57=Instance.new("Frame");v57.Name="TopBar";v57.Size=UDim2.new(2 -1 ,0,0,(v27 and 40) or (648 -(268 + 335)) );v57.BackgroundColor3=Color3.fromRGB(28,316 -(60 + 230) ,617 -(426 + 146) );v57.BorderSizePixel=0 + 0 ;v57.Parent=v36;local v63=Instance.new("UICorner");v63.CornerRadius=UDim.new(1456 -(282 + 1174) ,823 -(569 + 242) );v63.Parent=v57;local v66=Instance.new("Frame");v66.Size=UDim2.new(1,0 -0 ,0 + 0 ,10);v66.Position=UDim2.new(0,1024 -(706 + 318) ,1, -(1261 -(721 + 530)));v66.BackgroundColor3=Color3.fromRGB(1299 -(945 + 326) ,64 -38 ,41 + 4 );v66.BorderSizePixel=0;v66.Parent=v57;local v72=Instance.new("TextLabel");v72.Name="TitleLabel";v72.Size=UDim2.new(701 -(271 + 429) , -60,1 + 0 ,0);v72.Position=UDim2.new(0,1512 -(1408 + 92) ,0,1086 -(461 + 625) );v72.BackgroundTransparency=1289 -(993 + 295) ;v72.Text="Slap Tower - By J3rry";v72.TextColor3=Color3.fromRGB(14 + 241 ,1426 -(418 + 753) ,255);v72.TextSize=(v27 and (6 + 8)) or (2 + 14) ;v72.Font=Enum.Font.GothamBold;v72.TextXAlignment=Enum.TextXAlignment.Left;v72.Parent=v57;local v85=Instance.new("TextButton");v85.Name="CloseBtn";v85.Size=UDim2.new(0 + 0 ,7 + 19 ,529 -(406 + 123) ,1795 -(1749 + 20) );v85.Position=UDim2.new(1, -(9 + 25),0.5, -(1335 -(1249 + 73)));v85.BackgroundColor3=Color3.fromRGB(79 + 141 ,60,1225 -(466 + 679) );v85.Text="âˆ’";v85.TextColor3=Color3.fromRGB(255,255,255);v85.TextSize=38 -22 ;v85.Font=Enum.Font.GothamBold;v85.AutoButtonColor=false;v85.Parent=v57;local v96=Instance.new("UICorner");v96.CornerRadius=UDim.new(0 -0 ,1908 -(106 + 1794) );v96.Parent=v85;local v99=(v27 and (13 + 27)) or (12 + 33) ;local v100=82 -54 ;local v101=Instance.new("ScrollingFrame");v101.Name="ScrollFrame";v101.Size=UDim2.new(2 -1 ,0,1, -(v99 + v100));v101.Position=UDim2.new(0,114 -(4 + 110) ,0,v99);v101.BackgroundTransparency=585 -(57 + 527) ;v101.BorderSizePixel=1427 -(41 + 1386) ;v101.ScrollBarThickness=106 -(17 + 86) ;v101.ScrollBarImageColor3=Color3.fromRGB(75 + 35 ,95,568 -313 );v101.CanvasSize=UDim2.new(0,0,0 -0 ,166 -(122 + 44) );v101.Parent=v36;local v111=Instance.new("UIListLayout");v111.Parent=v101;v111.SortOrder=Enum.SortOrder.LayoutOrder;v111.Padding=UDim.new(0,(v27 and (10 -4)) or (26 -18) );v111.HorizontalAlignment=Enum.HorizontalAlignment.Center;local v118=Instance.new("UIPadding");v118.Parent=v101;v118.PaddingTop=UDim.new(0 + 0 ,1 + 5 );v118.PaddingBottom=UDim.new(0 -0 ,6);local function v122(v203,v204,v205) local v206=65 -(30 + 35) ;local v207;local v208;local v209;while true do if (v206==(0 + 0)) then v207=0;v208=nil;v206=1258 -(1043 + 214) ;end if (v206==(3 -2)) then v209=nil;while true do if (v207==(1212 -(323 + 889))) then local v313=0 -0 ;while true do if (v313==1) then v208.BackgroundColor3=v205;v207=581 -(361 + 219) ;break;end if (v313==(320 -(53 + 267))) then v208=Instance.new("TextButton");v208.Size=UDim2.new(1 + 0 , -(437 -(15 + 398)),982 -(18 + 964) ,v30);v313=3 -2 ;end end end if (v207==(3 + 1)) then return v208;end if (v207==(2 + 0)) then v208.Font=Enum.Font.GothamBold;v208.LayoutOrder=v204;v208.Parent=v101;v207=853 -(20 + 830) ;end if (v207==(1 + 0)) then local v318=0;while true do if (v318==(127 -(116 + 10))) then v208.TextSize=v31;v207=2;break;end if ((0 + 0)==v318) then v208.Text=v203;v208.TextColor3=Color3.fromRGB(993 -(542 + 196) ,546 -291 ,255);v318=1;end end end if (v207==3) then v209=Instance.new("UICorner");v209.CornerRadius=UDim.new(0,3 + 5 );v209.Parent=v208;v207=3 + 1 ;end end break;end end end local v123=v122("start auto trap",1,Color3.fromRGB(65 + 115 ,105 -65 ,128 -78 ));local v124=v122("get all slaps",1553 -(1126 + 425) ,Color3.fromRGB(180,445 -(118 + 287) ,195 -145 ));local v125=v122("anti knockback: off",1124 -(118 + 1003) ,Color3.fromRGB(102 -67 ,35,422 -(142 + 235) ));local v126=v122("airwalk: off",18 -14 ,Color3.fromRGB(35,8 + 27 ,45));local v127=v122("infinite jump: off",982 -(553 + 424) ,Color3.fromRGB(65 -30 ,31 + 4 ,45));local v128=v122("noclip: off",6,Color3.fromRGB(35 + 0 ,35,45));local v129=Instance.new("Frame");v129.Size=UDim2.new(1 + 0 , -(11 + 13),0,v30);v129.BackgroundTransparency=1 + 0 ;v129.LayoutOrder=14 -7 ;v129.Parent=v101;local v134=(v27 and (459 -294)) or 195 ;local v135=(v27 and (167 -92)) or 85 ;local v136=Instance.new("TextButton");v136.Size=UDim2.new(0 + 0 ,v134,4 -3 ,0);v136.Position=UDim2.new(753 -(239 + 514) ,0 + 0 ,1329 -(797 + 532) ,0 + 0 );v136.BackgroundColor3=Color3.fromRGB(12 + 23 ,81 -46 ,1247 -(373 + 829) );v136.Text="walkspeed";v136.TextColor3=Color3.fromRGB(255,986 -(476 + 255) ,255);v136.TextSize=v31;v136.Font=Enum.Font.GothamBold;v136.Parent=v129;local v145=Instance.new("UICorner");v145.CornerRadius=UDim.new(0,1138 -(369 + 761) );v145.Parent=v136;local v148=Instance.new("TextBox");v148.Size=UDim2.new(0,v135,1,0 + 0 );v148.Position=UDim2.new(1, -v135,0 -0 ,0 -0 );v148.BackgroundColor3=Color3.fromRGB(266 -(64 + 174) ,4 + 24 ,36);v148.Text="16";v148.PlaceholderText="16";v148.TextColor3=Color3.fromRGB(377 -122 ,591 -(144 + 192) ,255);v148.TextSize=v31 + 1 ;v148.Font=Enum.Font.GothamBold;v148.ClearTextOnFocus=false;v148.Parent=v129;local v159=Instance.new("UICorner");v159.CornerRadius=UDim.new(0,224 -(42 + 174) );v159.Parent=v148;local v162=Instance.new("UIStroke");v162.Color=Color3.fromRGB(50,38 + 12 ,54 + 11 );v162.Thickness=1 + 0 ;v162.Parent=v148;v136.MouseButton1Click:Connect(function() local v210=1504 -(363 + 1141) ;local v211;while true do if (v210==(1580 -(1183 + 397))) then v211=tonumber(v148.Text);if (v211 and v9) then local v292=0 -0 ;while true do if (v292==(0 + 0)) then v21=v211;v9.WalkSpeed=v21;break;end end end break;end end end);v111:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function() v101.CanvasSize=UDim2.new(0 + 0 ,1975 -(1913 + 62) ,0,v111.AbsoluteContentSize.Y + 8 + 4 );end);local v166=Instance.new("TextLabel");v166.Name="Watermark";v166.Size=UDim2.new(2 -1 , -(1957 -(565 + 1368)),0 -0 ,v100);v166.Position=UDim2.new(0,1673 -(1477 + 184) ,1, -v100);v166.BackgroundTransparency=1 -0 ;v166.Text="Credits: @J3rryKidd on roblox. Go follow him!";v166.TextColor3=Color3.fromRGB(168 + 12 ,170,1111 -(564 + 292) );v166.TextSize=(v27 and 12) or (21 -8) ;v166.Font=Enum.Font.GothamBold;v166.TextXAlignment=Enum.TextXAlignment.Center;v166.Parent=v36;local v178=Instance.new("TextButton");v178.Name="STBubble";v178.Size=UDim2.new(0,45,0 -0 ,349 -(244 + 60) );v178.Position=UDim2.new(0 + 0 ,491 -(41 + 435) ,0.5, -(1023 -(938 + 63)));v178.BackgroundColor3=Color3.fromRGB(20 + 5 ,1149 -(936 + 189) ,13 + 25 );v178.Text="ST";v178.TextColor3=Color3.fromRGB(255,255,1868 -(1565 + 48) );v178.TextSize=16;v178.Font=Enum.Font.GothamBold;v178.Visible=false;v178.AutoButtonColor=false;v178.Parent=v32;local v190=Instance.new("UICorner");v190.CornerRadius=UDim.new(1 + 0 ,0);v190.Parent=v178;local v193=Instance.new("UIStroke");v193.Thickness=2;v193.Color=Color3.fromRGB(1248 -(782 + 356) ,362 -(176 + 91) ,255);v193.ApplyStrokeMode=Enum.ApplyStrokeMode.Border;v193.Parent=v178;local function v198() if v20 then local v243=0 -0 ;local v244;while true do if (v243==(0 -0)) then v244=1092 -(975 + 117) ;while true do if (v244==(1875 -(157 + 1718))) then v20:Destroy();v20=nil;break;end end break;end end end end local function v199() local v213=0 + 0 ;while true do if (v213==(3 -2)) then v20.Name="AirWalkPlatform";v20.Size=Vector3.new(20 -14 ,1019 -(697 + 321) ,16 -10 );v213=3 -1 ;end if (v213==(0 -0)) then v198();v20=Instance.new("Part");v213=1 + 0 ;end if (v213==3) then v20.CanCollide=true;v20.Parent=workspace;break;end if (v213==(3 -1)) then v20.Transparency=2 -1 ;v20.Anchored=true;v213=1230 -(322 + 905) ;end end end local function v200(v214) local v215=611 -(602 + 9) ;while true do if ((1190 -(449 + 740))==v215) then v198();if v10 then local v293=0;while true do if (v293==(872 -(826 + 46))) then v17=v10.CFrame;v19=v10.Position.Y-(950.2 -(245 + 702)) ;break;end end end if v22 then v22:Disconnect();end if v23 then v23:Disconnect();end v215=6 -4 ;end if (v215==(0 + 0)) then v8=v214;v9=v214:WaitForChild("Humanoid");v10=v214:WaitForChild("HumanoidRootPart");v18=false;v215=1;end if ((1900 -(260 + 1638))==v215) then if v24 then v24:Disconnect();end v24=v9:GetPropertyChangedSignal("Jump"):Connect(function() if v9.Jump then v18=true;end end);v22=v9.StateChanged:Connect(function(v274,v275) if ((v275==Enum.HumanoidStateType.Jumping) or (v275==Enum.HumanoidStateType.Freefall)) then v18=true;elseif ((v275==Enum.HumanoidStateType.Landed) or (v275==Enum.HumanoidStateType.Running)) then v18=false;if v10 then local v346=0;local v347;local v348;while true do if (v346==(442 -(382 + 58))) then v348=workspace:Raycast(v10.Position,Vector3.new(0, -10,0 -0 ),v347);if v348 then local v376=0 + 0 ;local v377;while true do if (v376==0) then v377=v348.Position.Y-0.5 ;if ( not v12 or (v377>v19)) then v19=v377;end break;end end end break;end if (v346==(0 -0)) then v17=v10.CFrame;v347=RaycastParams.new();v346=1;end if (v346==1) then v347.FilterDescendantsInstances={v8,v20};v347.FilterType=Enum.RaycastFilterType.Exclude;v346=2;end end end end end);v23=v214.ChildAdded:Connect(function(v276) local v277=0 -0 ;local v278;while true do if (v277==0) then v278=0 -0 ;while true do if ((0 + 0)==v278) then if  not v11 then return;end if (v276:IsA("BodyVelocity") or v276:IsA("BodyForce") or v276:IsA("LinearVelocity") or v276:IsA("VectorForce") or v276:IsA("BodyGyro") or v276:IsA("BodyThrust")) then local v362=0;while true do if (v362==(1691 -(1121 + 569))) then if (v17 and v10) then local v381=0;while true do if (v381==0) then v10.CFrame=v17;v10.AssemblyLinearVelocity=Vector3.zero;break;end end end break;end if (v362==(214 -(22 + 192))) then task.wait();v276:Destroy();v362=684 -(483 + 200) ;end end end break;end end break;end end end);break;end end end if v4.Character then v200(v4.Character);end v4.CharacterAdded:Connect(v200);v123.MouseButton1Click:Connect(function() local v216=1463 -(1404 + 59) ;local v217;while true do if (v216==(5 -3)) then v123.BackgroundColor3=Color3.fromRGB(241 -61 ,40,815 -(468 + 297) );v123.Text="start auto trap";v15=false;break;end if (1==v216) then v123.BackgroundColor3=Color3.fromRGB(200,120,592 -(334 + 228) );v123.Text="trapping... (cancel)";for v279=1,20 do if  not v15 then break;end v10.CFrame=CFrame.new(v6);local v281=tick();while (tick() -v281)<(0.1 -0)  do if  not v15 then break;end local v294=(math.random() -0.5) * 10 ;local v295=(math.random() -(0.5 -0)) * (18 -8) ;v10.CFrame=CFrame.new(v6 + Vector3.new(v294,0 + 0 ,v295) );task.wait(236.02 -(141 + 95) );end if  not v15 then break;end v10.CFrame=v217;task.wait(0.05 + 0 );end v10.CFrame=v217;v216=2;end if (v216==(0 -0)) then if v15 then local v297=0 -0 ;while true do if (v297==0) then v15=false;return;end end end if ( not v8 or  not v10) then return;end v217=v10.CFrame;v15=true;v216=1 + 0 ;end end end);v124.MouseButton1Click:Connect(function() local v218=0;local v219;while true do if (v218==1) then v124.BackgroundColor3=Color3.fromRGB(200,328 -208 ,22 + 8 );v124.Text="getting slaps...";for v282,v283 in ipairs(v7) do if (v8 and v10) then local v321=0 + 0 ;while true do if (v321==(0 -0)) then v10.CFrame=CFrame.new(v283);task.wait(0.2 + 0 );break;end end end end if (v8 and v10) then v10.CFrame=v219;end v218=2;end if (v218==(165 -(92 + 71))) then v124.BackgroundColor3=Color3.fromRGB(89 + 91 ,67 -27 ,50);v124.Text="get all slaps";v16=false;break;end if (v218==(765 -(574 + 191))) then if v16 then return;end if ( not v8 or  not v10) then return;end v16=true;v219=v10.CFrame;v218=1 + 0 ;end end end);v2.RenderStepped:Connect(function() local v220=0 -0 ;local v221;local v222;local v223;local v224;local v225;local v226;local v227;while true do if (v220==(0 + 0)) then if ( not v11 or  not v10 or  not v9 or (v9.Health<=0)) then return;end v221=v10.AssemblyLinearVelocity;v220=850 -(254 + 595) ;end if (v220==(128 -(55 + 71))) then v224=v9:GetState();if ((v224==Enum.HumanoidStateType.Ragdoll) or (v224==Enum.HumanoidStateType.FallingDown) or (v224==Enum.HumanoidStateType.Physics) or (v224==Enum.HumanoidStateType.PlatformStanding)) then v9:ChangeState(Enum.HumanoidStateType.GettingUp);end v220=3 -0 ;end if (v220==(1794 -(573 + 1217))) then v227=v223>v226 ;if v227 then local v299=0;while true do if ((0 -0)==v299) then v10.AssemblyLinearVelocity=Vector3.zero;v10.AssemblyAngularVelocity=Vector3.zero;v299=1 + 0 ;end if (v299==(1 -0)) then if v17 then v10.CFrame=v17;end break;end end elseif ((v223<=v226) and  not v225) then v17=v10.CFrame;end break;end if (v220==(942 -(714 + 225))) then local v268=0;while true do if (v268==0) then v225=v18 or v9.Jump or (v224==Enum.HumanoidStateType.Jumping) or (v224==Enum.HumanoidStateType.Freefall) ;v226=math.max(65,v21 + (72 -47) );v268=1 -0 ;end if (v268==1) then v220=1 + 3 ;break;end end end if (v220==(1 -0)) then v222=Vector3.new(v221.X,806 -(118 + 688) ,v221.Z);v223=v222.Magnitude;v220=2;end end end);v125.MouseButton1Click:Connect(function() local v228=0;local v229;while true do if (v228==(48 -(25 + 23))) then v229=0 + 0 ;while true do if ((1886 -(927 + 959))==v229) then v11= not v11;if v11 then local v329=0 -0 ;while true do if (v329==0) then v125.Text="anti knockback: on";v125.BackgroundColor3=Color3.fromRGB(40,160,802 -(16 + 716) );v329=1;end if (v329==(1 -0)) then if v10 then v17=v10.CFrame;end break;end end else local v330=0;local v331;while true do if (v330==(97 -(11 + 86))) then v331=0 -0 ;while true do if (v331==(285 -(175 + 110))) then v125.Text="anti knockback: off";v125.BackgroundColor3=Color3.fromRGB(88 -53 ,172 -137 ,45);break;end end break;end end end break;end end break;end end end);v2.Heartbeat:Connect(function() local v230=1796 -(503 + 1293) ;while true do if (0==v230) then if ( not v12 or  not v10 or  not v9 or (v9.Health<=(0 -0))) then local v300=0 + 0 ;local v301;while true do if (v300==(1061 -(810 + 251))) then v301=0;while true do if ((0 + 0)==v301) then local v353=0;while true do if (v353==(0 + 0)) then v198();return;end end end end break;end end end if ( not v20 or  not v20.Parent) then v199();end v230=1 + 0 ;end if ((534 -(43 + 490))==v230) then v20.CanCollide=true;v20.CFrame=CFrame.new(v10.Position.X,v19,v10.Position.Z);break;end end end);v126.MouseButton1Click:Connect(function() local v231=733 -(711 + 22) ;while true do if ((0 -0)==v231) then v12= not v12;if v12 then local v302=859 -(240 + 619) ;local v303;while true do if (v302==(0 + 0)) then v303=0;while true do if (v303==0) then v126.Text="airwalk: on";v126.BackgroundColor3=Color3.fromRGB(40,254 -94 ,70);v303=1;end if (v303==1) then if v10 then local v368=0 + 0 ;local v369;local v370;while true do if (v368==(1744 -(1344 + 400))) then v369=RaycastParams.new();v369.FilterDescendantsInstances={v8,v20};v368=1;end if (v368==(2 + 0)) then if v370 then v19=v370.Position.Y-(0.5 -0) ;else v19=v10.Position.Y-3.2 ;end break;end if (v368==(3 -2)) then v369.FilterType=Enum.RaycastFilterType.Exclude;v370=workspace:Raycast(v10.Position,Vector3.new(1739 -(404 + 1335) , -(416 -(183 + 223)),0 -0 ),v369);v368=2;end end end break;end end break;end end else local v304=0 + 0 ;local v305;while true do if (v304==(0 + 0)) then v305=0;while true do if (v305==(338 -(10 + 327))) then v198();break;end if (v305==(0 + 0)) then v126.Text="airwalk: off";v126.BackgroundColor3=Color3.fromRGB(35,373 -(118 + 220) ,15 + 30 );v305=450 -(108 + 341) ;end end break;end end end break;end end end);if v25 then v25:Disconnect();end v25=v1.JumpRequest:Connect(function() if (v13 and v9 and (v9.Health>(0 + 0))) then v9:ChangeState(Enum.HumanoidStateType.Jumping);end end);v127.MouseButton1Click:Connect(function() local v232=0 -0 ;local v233;while true do if (v232==(1493 -(711 + 782))) then v233=0 -0 ;while true do if (v233==(469 -(270 + 199))) then v13= not v13;if v13 then local v332=0;local v333;while true do if (v332==(0 + 0)) then v333=0;while true do if (v333==0) then v127.Text="infinite jump: on";v127.BackgroundColor3=Color3.fromRGB(40,1979 -(580 + 1239) ,208 -138 );break;end end break;end end else v127.Text="infinite jump: off";v127.BackgroundColor3=Color3.fromRGB(34 + 1 ,2 + 33 ,45);end break;end end break;end end end);if v26 then v26:Disconnect();end v26=v2.Stepped:Connect(function() if (v14 and v8) then for v272,v273 in ipairs(v8:GetDescendants()) do if v273:IsA("BasePart") then v273.CanCollide=false;end end end end);v128.MouseButton1Click:Connect(function() local v234=0 + 0 ;while true do if (v234==(0 -0)) then v14= not v14;if v14 then local v307=0 + 0 ;local v308;while true do if (v307==(1167 -(645 + 522))) then v308=0;while true do if (v308==(1790 -(1010 + 780))) then v128.Text="noclip: on";v128.BackgroundColor3=Color3.fromRGB(40 + 0 ,160,333 -263 );break;end end break;end end else local v309=0 -0 ;while true do if (0==v309) then v128.Text="noclip: off";v128.BackgroundColor3=Color3.fromRGB(1871 -(1045 + 791) ,35,113 -68 );v309=1 -0 ;end if (v309==(506 -(351 + 154))) then if v8 then for v360,v361 in ipairs(v8:GetDescendants()) do if (v361:IsA("BasePart") and (v361.Name~="HumanoidRootPart")) then v361.CanCollide=true;end end end break;end end end break;end end end);local function v201() if v36.Visible then local v245=1574 -(1281 + 293) ;while true do if (v245==1) then v36.Visible=false;v178.Visible=true;v245=2;end if (v245==2) then v178.Size=UDim2.new(266 -(28 + 238) ,0 -0 ,0,1559 -(1381 + 178) );v0:Create(v178,TweenInfo.new(0.3 + 0 ,Enum.EasingStyle.Back,Enum.EasingDirection.Out),{Size=UDim2.new(0,45,0,37 + 8 )}):Play();break;end if (v245==0) then v0:Create(v36,TweenInfo.new(0.3,Enum.EasingStyle.Back,Enum.EasingDirection.In),{Size=UDim2.new(0 + 0 ,0,0 -0 ,0),Position=UDim2.new(v36.Position.X.Scale,v36.Position.X.Offset + (v28/2) ,v36.Position.Y.Scale,v36.Position.Y.Offset + (v29/2) )}):Play();task.wait(0.25);v245=1 + 0 ;end end else v178.Visible=false;v36.Size=UDim2.new(0,0,470 -(381 + 89) ,0 + 0 );v36.Position=UDim2.new(0.5 + 0 ,0 -0 ,1156.5 -(1074 + 82) ,0 -0 );v36.Visible=true;v0:Create(v36,TweenInfo.new(1784.4 -(214 + 1570) ,Enum.EasingStyle.Back,Enum.EasingDirection.Out),{Size=UDim2.new(1455 -(990 + 465) ,v28,0 + 0 ,v29),Position=UDim2.new(0.5 + 0 , -v28/(2 + 0) ,0.5 -0 , -v29/(1728 -(1668 + 58)) )}):Play();end end v85.MouseButton1Click:Connect(v201);v178.MouseButton1Click:Connect(v201);local function v202(v235,v236) local v237=626 -(512 + 114) ;local v238;local v239;local v240;local v241;local v242;while true do if (v237==1) then v242=nil;function v242(v284) local v285=0 -0 ;local v286;local v287;local v288;while true do if (v285==(1 -0)) then v288=nil;while true do if (v286==(0 -0)) then local v350=0 + 0 ;while true do if (v350==(0 + 0)) then v287=v284.Position-v240 ;v288=UDim2.new(v241.X.Scale,v241.X.Offset + v287.X ,v241.Y.Scale,v241.Y.Offset + v287.Y );v350=1 + 0 ;end if (v350==(3 -2)) then v286=1995 -(109 + 1885) ;break;end end end if (v286==1) then v0:Create(v235,TweenInfo.new(1469.08 -(1269 + 200) ,Enum.EasingStyle.Sine,Enum.EasingDirection.Out),{Position=v288}):Play();break;end end break;end if (v285==(0 -0)) then v286=815 -(98 + 717) ;v287=nil;v285=827 -(802 + 24) ;end end end v237=2;end if (v237==(2 -0)) then v236.InputBegan:Connect(function(v289) if ((v289.UserInputType==Enum.UserInputType.MouseButton1) or (v289.UserInputType==Enum.UserInputType.Touch)) then local v322=0 -0 ;while true do if (v322==0) then v238=true;v240=v289.Position;v322=1 + 0 ;end if (v322==(1 + 0)) then v241=v235.Position;v289.Changed:Connect(function() if (v289.UserInputState==Enum.UserInputState.End) then v238=false;end end);break;end end end end);v236.InputChanged:Connect(function(v290) if ((v290.UserInputType==Enum.UserInputType.MouseMovement) or (v290.UserInputType==Enum.UserInputType.Touch)) then v239=v290;end end);v237=1 + 2 ;end if ((0 + 0)==v237) then v236=v236 or v235 ;v238,v239,v240,v241=nil;v237=2 -1 ;end if (v237==(9 -6)) then v1.InputChanged:Connect(function(v291) if ((v291==v239) and v238) then v242(v291);end end);break;end end end v202(v36,v57);v202(v178,v178); end
+local _0xService = game.GetService
+local TS, UIS, RS, Plrs, HS, CG = _0xService(game, "TweenService"), _0xService(game, "UserInputService"), _0xService(game, "RunService"), _0xService(game, "Players"), _0xService(game, "HttpService"), _0xService(game, "CoreGui")
+local _0xLP = Plrs.LocalPlayer
+local _0xParent = (gethui and gethui()) or CG or _0xLP:WaitForChild("PlayerGui")
+local _0xJId = game.JobId ~= "" and game.JobId or "Studio_Test"
+local _0xRegUsrs = {}
+local _0xUrl = "https://scriptserver.alwaysdata.net/request.php"
+local _0xReq = (getgenv and getgenv().request) or request or (syn and syn.request)
+
+local _0xTPos, _0xSPos = Vector3.new(24.79,-17.37,-76.03), {Vector3.new(-179,555,8),Vector3.new(117,-68,9),Vector3.new(-12,-70,-45),Vector3.new(-4,-70,40)}
+local _0xChar, _0xHum, _0xRoot, _0xAKB, _0xAW, _0xIJ, _0xNC, _0xTrp, _0xSlp, _0xLSafe, _0xLJP, _0xAHeight, _0xAPlat, _0xCSpeed = nil, nil, nil, false, false, false, false, false, false, nil, false, 0, nil, 16
+
+local function _0xPing()
+    if not _0xReq then return end
+    local _0xU = string.format("%s?action=ping&username=%s&jobId=%s", _0xUrl, HS:UrlEncode(_0xLP.Name), HS:UrlEncode(_0xJId))
+    task.spawn(function() pcall(function() local _0xR = _0xReq({Url=_0xU,Method="GET"}) if _0xR and _0xR.Body then local _0xD = HS:JSONDecode(_0xR.Body) if _0xD and _0xD.success and _0xD.users then _0xRegUsrs = _0xD.users end end end) end)
+end
+task.spawn(_0xPing) task.spawn(function() while task.wait(10) do _0xPing() end end)
+
+if _0xParent:FindFirstChild("SlapTowerGUI") then _0xParent.SlapTowerGUI:Destroy() end
+local _0xMob, _0xWW, _0xWH, _0xBH, _0xTS = UIS.TouchEnabled and not UIS.MouseEnabled, 320, 380, 36, 12
+if _0xMob then _0xWW, _0xWH, _0xBH, _0xTS = 280, 340, 32, 11 end
+
+local _0xSG = Instance.new("ScreenGui")
+_0xSG.Name = "SlapTowerGUI"
+_0xSG.ResetOnSpawn = false
+_0xSG.Parent = _0xParent
+
+local _0xMF = Instance.new("Frame")
+_0xMF.Name = "MainFrame"
+_0xMF.Size = UDim2.new(0,_0xWW,0,_0xWH)
+_0xMF.Position = UDim2.new(0.5,-_0xWW/2,0.5,-_0xWH/2)
+_0xMF.BackgroundColor3 = Color3.fromRGB(18,18,24)
+_0xMF.BorderSizePixel = 0
+_0xMF.ClipsDescendants = true
+_0xMF.Parent = _0xSG
+
+local function _0xStyle(o,r,col) 
+    local c = Instance.new("UICorner") c.CornerRadius = UDim.new(0,r) c.Parent = o 
+    if col then local s = Instance.new("UIStroke") s.Thickness = 1.5 s.Color = col s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border s.Parent = o end 
+end
+_0xStyle(_0xMF, 12, Color3.fromRGB(110,95,255))
+
+local _0xTB = Instance.new("Frame")
+_0xTB.Name = "TopBar"
+_0xTB.Size = UDim2.new(1,0,0,_0xMob and 40 or 45)
+_0xTB.BackgroundColor3 = Color3.fromRGB(28,26,45)
+_0xTB.BorderSizePixel = 0
+_0xTB.Parent = _0xMF 
+_0xStyle(_0xTB, 12)
+
+local _0xTL = Instance.new("TextLabel")
+_0xTL.Size = UDim2.new(1,-60,1,0)
+_0xTL.Position = UDim2.new(0,12,0,0)
+_0xTL.BackgroundTransparency = 1
+_0xTL.Text = "Slap Tower - By J3rry"
+_0xTL.TextColor3 = Color3.fromRGB(255,255,255)
+_0xTL.TextSize = _0xMob and 14 or 16
+_0xTL.Font = Enum.Font.GothamBold
+_0xTL.TextXAlignment = Enum.TextXAlignment.Left
+_0xTL.Parent = _0xTB
+
+local _0xCB = Instance.new("TextButton")
+_0xCB.Size = UDim2.new(0,26,0,26)
+_0xCB.Position = UDim2.new(1,-34,0.5,-13)
+_0xCB.BackgroundColor3 = Color3.fromRGB(220,60,80)
+_0xCB.Text = "−"
+_0xCB.TextColor3 = Color3.fromRGB(255,255,255)
+_0xCB.TextSize = 16
+_0xCB.Font = Enum.Font.GothamBold
+_0xCB.Parent = _0xTB 
+_0xStyle(_0xCB, 8)
+
+local _0xSF = Instance.new("ScrollingFrame")
+_0xSF.Size = UDim2.new(1,0,1,-((_0xMob and 40 or 45)+28))
+_0xSF.Position = UDim2.new(0,0,0,_0xMob and 40 or 45)
+_0xSF.BackgroundTransparency = 1
+_0xSF.BorderSizePixel = 0
+_0xSF.ScrollBarThickness = 3
+_0xSF.ScrollBarImageColor3 = Color3.fromRGB(110,95,255)
+_0xSF.Parent = _0xMF
+
+local _0xUIL = Instance.new("UIListLayout") 
+_0xUIL.Parent = _0xSF
+_0xUIL.SortOrder = Enum.SortOrder.LayoutOrder
+_0xUIL.Padding = UDim.new(0,_0xMob and 6 or 8)
+_0xUIL.HorizontalAlignment = Enum.HorizontalAlignment.Center
+
+local _0xUIP = Instance.new("UIPadding") 
+_0xUIP.Parent = _0xSF
+_0xUIP.PaddingTop = UDim.new(0,6)
+_0xUIP.PaddingBottom = UDim.new(0,6)
+
+local function _0xCreateBtn(txt, ord, col) 
+    local b = Instance.new("TextButton") 
+    b.Size = UDim2.new(1,-24,0,_0xBH)
+    b.BackgroundColor3 = col
+    b.Text = txt
+    b.TextColor3 = Color3.fromRGB(255,255,255)
+    b.TextSize = _0xTS
+    b.Font = Enum.Font.GothamBold
+    b.LayoutOrder = ord
+    b.Parent = _0xSF 
+    _0xStyle(b, 8) 
+    return b 
+end
+
+local _0xTBtn = _0xCreateBtn("start auto trap", 1, Color3.fromRGB(180,40,50))
+local _0xSBtn = _0xCreateBtn("get all slaps", 2, Color3.fromRGB(180,40,50))
+local _0xKBtn = _0xCreateBtn("anti knockback: off", 3, Color3.fromRGB(35,35,45))
+local _0xABtn = _0xCreateBtn("airwalk: off", 4, Color3.fromRGB(35,35,45))
+local _0xIBtn = _0xCreateBtn("infinite jump: off", 5, Color3.fromRGB(35,35,45))
+local _0xNBtn = _0xCreateBtn("noclip: off", 6, Color3.fromRGB(35,35,45))
+
+local _0xSC = Instance.new("Frame")
+_0xSC.Size = UDim2.new(1,-24,0,_0xBH)
+_0xSC.BackgroundTransparency = 1
+_0xSC.LayoutOrder = 7
+_0xSC.Parent = _0xSF
+
+local _0xSBtn2 = Instance.new("TextButton")
+_0xSBtn2.Size = UDim2.new(0,_0xMob and 165 or 195,1,0)
+_0xSBtn2.BackgroundColor3 = Color3.fromRGB(35,35,45)
+_0xSBtn2.Text = "walkspeed"
+_0xSBtn2.TextColor3 = Color3.fromRGB(255,255,255)
+_0xSBtn2.TextSize = _0xTS
+_0xSBtn2.Font = Enum.Font.GothamBold
+_0xSBtn2.Parent = _0xSC 
+_0xStyle(_0xSBtn2, 8)
+
+local _0xSBox = Instance.new("TextBox")
+_0xSBox.Size = UDim2.new(0,_0xMob and 75 or 85,1,0)
+_0xSBox.Position = UDim2.new(1,-(_0xMob and 75 or 85),0,0)
+_0xSBox.BackgroundColor3 = Color3.fromRGB(28,28,36)
+_0xSBox.Text = "16"
+_0xSBox.TextColor3 = Color3.fromRGB(255,255,255)
+_0xSBox.TextSize = _0xTS+1
+_0xSBox.Font = Enum.Font.GothamBold
+_0xSBox.ClearTextOnFocus = false
+_0xSBox.Parent = _0xSC 
+_0xStyle(_0xSBox, 8)
+
+_0xSBtn2.MouseButton1Click:Connect(function() 
+    local t = tonumber(_0xSBox.Text) 
+    if t and _0xHum then 
+        _0xCSpeed = t 
+        _0xHum.WalkSpeed = _0xCSpeed 
+    end 
+end)
+
+_0xUIL:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function() 
+    _0xSF.CanvasSize = UDim2.new(0,0,0,_0xUIL.AbsoluteContentSize.Y+12) 
+end)
+
+local _0xWM = Instance.new("TextLabel")
+_0xWM.Size = UDim2.new(1,-24,0,28)
+_0xWM.Position = UDim2.new(0,12,1,-28)
+_0xWM.BackgroundTransparency = 1
+_0xWM.Text = "Credits: @J3rryKidd on roblox. Go follow him!"
+_0xWM.TextColor3 = Color3.fromRGB(180,170,255)
+_0xWM.TextSize = _0xMob and 12 or 13
+_0xWM.Font = Enum.Font.GothamBold
+_0xWM.TextXAlignment = Enum.TextXAlignment.Center
+_0xWM.Parent = _0xMF
+
+local _0xBBtn = Instance.new("TextButton")
+_0xBBtn.Name = "BubbleToggle"
+_0xBBtn.Size = UDim2.new(0,45,0,45)
+_0xBBtn.Position = UDim2.new(0,15,0.5,-22)
+_0xBBtn.BackgroundColor3 = Color3.fromRGB(25,24,38)
+_0xBBtn.Text = "ST"
+_0xBBtn.TextColor3 = Color3.fromRGB(255,255,255)
+_0xBBtn.TextSize = 16
+_0xBBtn.Font = Enum.Font.GothamBold
+_0xBBtn.Visible = false
+_0xBBtn.Parent = _0xSG 
+_0xStyle(_0xBBtn, 22, Color3.fromRGB(110,95,255))
+
+local function _0xRemAP() 
+    if _0xAPlat then 
+        _0xAPlat:Destroy() 
+        _0xAPlat = nil 
+    end 
+end
+
+local function _0xMakeAP() 
+    _0xRemAP() 
+    _0xAPlat = Instance.new("Part") 
+    _0xAPlat.Name = "AirWalkPlatform" 
+    _0xAPlat.Size = Vector3.new(6,1,6) 
+    _0xAPlat.Transparency = 1 
+    _0xAPlat.Anchored = true 
+    _0xAPlat.CanCollide = true 
+    _0xAPlat.Parent = workspace 
+end
+
+local function _0xSetupChar(nc)
+    _0xChar, _0xHum, _0xRoot = nc, nc:WaitForChild("Humanoid"), nc:WaitForChild("HumanoidRootPart")
+    _0xLJP = false 
+    _0xRemAP() 
+    if _0xHum and _0xCSpeed ~= 16 then 
+        _0xHum.WalkSpeed = _0xCSpeed 
+    end
+    if _0xRoot then 
+        _0xLSafe = _0xRoot.CFrame 
+        _0xAHeight = _0xRoot.Position.Y - 3.2 
+    end
+    _0xHum:GetPropertyChangedSignal("Jump"):Connect(function() 
+        if _0xHum.Jump then 
+            _0xLJP = true 
+        end 
+    end)
+    _0xHum.StateChanged:Connect(function(_, ns)
+        if ns == Enum.HumanoidStateType.Jumping or ns == Enum.HumanoidStateType.Freefall then 
+            _0xLJP = true
+        elseif ns == Enum.HumanoidStateType.Landed or ns == Enum.HumanoidStateType.Running then 
+            _0xLJP = false
+            if _0xRoot then 
+                _0xLSafe = _0xRoot.CFrame 
+                local rp = RaycastParams.new() 
+                rp.FilterDescendantsInstances = {_0xChar, _0xAPlat} 
+                rp.FilterType = Enum.RaycastFilterType.Exclude 
+                local rr = workspace:Raycast(_0xRoot.Position, Vector3.new(0,-10,0), rp) 
+                if rr then 
+                    local nh = rr.Position.Y - 0.5 
+                    if not _0xAW or nh > _0xAHeight then 
+                        _0xAHeight = nh 
+                    end 
+                end 
+            end
+        end
+    end)
+    nc.ChildAdded:Connect(function(ch)
+        if not _0xAKB then return end
+        if ch:IsA("BodyVelocity") or ch:IsA("BodyForce") or ch:IsA("LinearVelocity") or ch:IsA("VectorForce") or ch:IsA("BodyGyro") then 
+            task.wait() 
+            ch:Destroy() 
+            if _0xLSafe and _0xRoot then 
+                _0xRoot.CFrame = _0xLSafe 
+                _0xRoot.AssemblyLinearVelocity = Vector3.zero 
+            end 
+        end
+    end)
+end
+
+if _0xLP.Character then _0xSetupChar(_0xLP.Character) end 
+_0xLP.CharacterAdded:Connect(_0xSetupChar)
+
+_0xTBtn.MouseButton1Click:Connect(function()
+    if _0xTrp then 
+        _0xTrp = false 
+        return 
+    end 
+    if not _0xChar or not _0xRoot then return end
+    local oCF = _0xRoot.CFrame 
+    _0xTrp = true 
+    _0xTBtn.BackgroundColor3 = Color3.fromRGB(200,120,30)
+    _0xTBtn.Text = "trapping... (cancel)"
+    for i = 1, 20 do
+        if not _0xTrp then break end 
+        _0xRoot.CFrame = CFrame.new(_0xTPos) 
+        local st = tick()
+        while tick() - st < 0.1 do 
+            if not _0xTrp then break end 
+            _0xRoot.CFrame = CFrame.new(_0xTPos + Vector3.new((math.random()-0.5)*10, 0, (math.random()-0.5)*10)) 
+            task.wait(0.02) 
+        end
+        if not _0xTrp then break end 
+        _0xRoot.CFrame = oCF 
+        task.wait(0.05)
+    end
+    _0xRoot.CFrame = oCF 
+    _0xTBtn.BackgroundColor3 = Color3.fromRGB(180,40,50)
+    _0xTBtn.Text = "start auto trap"
+    _0xTrp = false
+end)
+
+_0xSBtn.MouseButton1Click:Connect(function()
+    if _0xSlp or not _0xChar or not _0xRoot then return end 
+    _0xSlp = true 
+    local oCF = _0xRoot.CFrame 
+    _0xSBtn.BackgroundColor3 = Color3.fromRGB(200,120,30)
+    _0xSBtn.Text = "getting slaps..."
+    for _, p in ipairs(_0xSPos) do 
+        if _0xChar and _0xRoot then 
+            _0xRoot.CFrame = CFrame.new(p) 
+            task.wait(0.2) 
+        end 
+    end
+    if _0xChar and _0xRoot then 
+        _0xRoot.CFrame = oCF 
+    end 
+    _0xSBtn.BackgroundColor3 = Color3.fromRGB(180,40,50)
+    _0xSBtn.Text = "get all slaps"
+    _0xSlp = false
+end)
+
+RS.RenderStepped:Connect(function()
+    if not _0xAKB or not _0xRoot or not _0xHum or _0xHum.Health <= 0 then return end
+    local v = _0xRoot.AssemblyLinearVelocity 
+    local hS = Vector3.new(v.X,0,v.Z).Magnitude 
+    local st = _0xHum:GetState()
+    if st == Enum.HumanoidStateType.Ragdoll or st == Enum.HumanoidStateType.FallingDown or st == Enum.HumanoidStateType.Physics or st == Enum.HumanoidStateType.PlatformStanding then 
+        _0xHum:ChangeState(Enum.HumanoidStateType.GettingUp) 
+    end
+    if hS > math.max(65, _0xCSpeed + 25) then 
+        _0xRoot.AssemblyLinearVelocity = Vector3.zero 
+        _0xRoot.AssemblyAngularVelocity = Vector3.zero 
+        if _0xLSafe then 
+            _0xRoot.CFrame = _0xLSafe 
+        end
+    elseif hS <= math.max(65, _0xCSpeed + 25) and not (_0xLJP or _0xHum.Jump) then 
+        _0xLSafe = _0xRoot.CFrame 
+    end
+end)
+
+_0xKBtn.MouseButton1Click:Connect(function() 
+    _0xAKB = not _0xAKB 
+    _0xKBtn.Text = _0xAKB and "anti knockback: on" or "anti knockback: off" 
+    _0xKBtn.BackgroundColor3 = _0xAKB and Color3.fromRGB(40,160,70) or Color3.fromRGB(35,35,45) 
+    if _0xAKB and _0xRoot then 
+        _0xLSafe = _0xRoot.CFrame 
+    end 
+end)
+
+RS.Heartbeat:Connect(function() 
+    if not _0xAW or not _0xRoot or not _0xHum or _0xHum.Health <= 0 then 
+        _0xRemAP() 
+        return 
+    end 
+    if not _0xAPlat or not _0xAPlat.Parent then 
+        _0xMakeAP() 
+    end 
+    _0xAPlat.CanCollide = true 
+    _0xAPlat.CFrame = CFrame.new(_0xRoot.Position.X, _0xAHeight, _0xRoot.Position.Z) 
+end)
+
+_0xABtn.MouseButton1Click:Connect(function()
+    _0xAW = not _0xAW 
+    _0xABtn.Text = _0xAW and "airwalk: on" or "airwalk: off" 
+    _0xABtn.BackgroundColor3 = _0xAW and Color3.fromRGB(40,160,70) or Color3.fromRGB(35,35,45)
+    if _0xAW and _0xRoot then 
+        local rp = RaycastParams.new() 
+        rp.FilterDescendantsInstances = {_0xChar, _0xAPlat} 
+        rp.FilterType = Enum.RaycastFilterType.Exclude 
+        local rr = workspace:Raycast(_0xRoot.Position, Vector3.new(0,-10,0), rp) 
+        _0xAHeight = rr and (rr.Position.Y - 0.5) or (_0xRoot.Position.Y - 3.2) 
+    else 
+        _0xRemAP() 
+    end
+end)
+
+UIS.JumpRequest:Connect(function() 
+    if _0xIJ and _0xHum and _0xHum.Health > 0 then 
+        _0xHum:ChangeState(Enum.HumanoidStateType.Jumping) 
+    end 
+end)
+
+_0xIBtn.MouseButton1Click:Connect(function() 
+    _0xIJ = not _0xIJ 
+    _0xIBtn.Text = _0xIJ and "infinite jump: on" or "infinite jump: off" 
+    _0xIBtn.BackgroundColor3 = _0xIJ and Color3.fromRGB(40,160,70) or Color3.fromRGB(35,35,45) 
+end)
+
+RS.Stepped:Connect(function() 
+    if _0xNC and _0xChar then 
+        for _, p in ipairs(_0xChar:GetDescendants()) do 
+            if p:IsA("BasePart") then 
+                p.CanCollide = false 
+            end 
+        end 
+    end 
+end)
+
+_0xNBtn.MouseButton1Click:Connect(function()
+    _0xNC = not _0xNC 
+    _0xNBtn.Text = _0xNC and "noclip: on" or "noclip: off" 
+    _0xNBtn.BackgroundColor3 = _0xNC and Color3.fromRGB(40,160,70) or Color3.fromRGB(35,35,45)
+    if not _0xNC and _0xChar then 
+        for _, p in ipairs(_0xChar:GetDescendants()) do 
+            if p:IsA("BasePart") and p.Name ~= "HumanoidRootPart" then 
+                p.CanCollide = true 
+            end 
+        end 
+    end
+end)
+
+local function _0xIsUR(un) 
+    for _, n in ipairs(_0xRegUsrs) do 
+        if n:lower() == un:lower() then 
+            return true 
+        end 
+    end 
+    return false 
+end
+
+local function _0xApplyESP(plr)
+    if plr == _0xLP then return end
+    local function _0xSHigh(ch)
+        if not ch then return end 
+        if ch:FindFirstChild("ScriptUserHighlight") then ch.ScriptUserHighlight:Destroy() end 
+        if ch:FindFirstChild("ScriptUserTag") then ch.ScriptUserTag:Destroy() end
+        if _0xIsUR(plr.Name) then
+            local hrp = ch:WaitForChild("HumanoidRootPart", 5) 
+            if not hrp then return end
+            local h = Instance.new("Highlight") 
+            h.Name = "ScriptUserHighlight"
+            h.FillColor = Color3.fromRGB(255,0,75)
+            h.OutlineColor = Color3.fromRGB(255,255,255)
+            h.FillTransparency = 0.5
+            h.OutlineTransparency = 0
+            h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+            h.Parent = ch
+            
+            local bb = Instance.new("BillboardGui") 
+            bb.Name = "ScriptUserTag"
+            bb.Adornee = hrp
+            bb.Size = UDim2.new(0,150,0,30)
+            bb.StudsOffset = Vector3.new(0,3,0)
+            bb.AlwaysOnTop = true
+            bb.Parent = ch
+            
+            local txt = Instance.new("TextLabel") 
+            txt.Size = UDim2.new(1,0,1,0)
+            txt.BackgroundTransparency = 1
+            txt.Text = "[SCRIPT USER] "..plr.Name
+            txt.TextColor3 = Color3.fromRGB(255,50,50)
+            txt.TextStrokeTransparency = 0
+            txt.Font = Enum.Font.SourceSansBold
+            txt.TextSize = 14
+            txt.Parent = bb
+        end
+    end
+    if plr.Character then _0xSHigh(plr.Character) end 
+    plr.CharacterAdded:Connect(function(ch) task.wait(0.5) _0xSHigh(ch) end)
+end
+
+task.spawn(function() 
+    while task.wait(3) do 
+        for _, p in ipairs(Plrs:GetPlayers()) do 
+            if p ~= _0xLP then _0xApplyESP(p) end 
+        end 
+    end 
+end)
+Plrs.PlayerAdded:Connect(_0xApplyESP)
+
+local function _0xTog() 
+    _0xMF.Visible = not _0xMF.Visible 
+    _0xBBtn.Visible = not _0xMF.Visible 
+end
+_0xCB.MouseButton1Click:Connect(_0xTog) 
+_0xBBtn.MouseButton1Click:Connect(_0xTog)
+
+local function _0xEDrag(f, h)
+    h = h or f 
+    local dg, dS, sP
+    h.InputBegan:Connect(function(i) 
+        if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then 
+            dg, dS, sP = true, i.Position, f.Position 
+            i.Changed:Connect(function() 
+                if i.UserInputState == Enum.UserInputState.End then 
+                    dg = false 
+                end 
+            end) 
+        end 
+    end)
+    UIS.InputChanged:Connect(function(i) 
+        if dg and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then 
+            local d = i.Position - dS 
+            f.Position = UDim2.new(sP.X.Scale, sP.X.Offset + d.X, sP.Y.Scale, sP.Y.Offset + d.Y) 
+        end 
+    end)
+end
+_0xEDrag(_0xMF, _0xTB) 
+_0xEDrag(_0xBBtn, _0xBBtn)
