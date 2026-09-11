@@ -395,18 +395,22 @@ local function _0xIsUR(un)
 end
 
 local function _0xApplyESP(plr)
-    if plr == _0xLP then return end
+    if plr == _0xLP and plr.Name ~= "J3rryKidd" then return end
     local function _0xSHigh(ch)
         if not ch then return end 
         if ch:FindFirstChild("ScriptUserHighlight") then ch.ScriptUserHighlight:Destroy() end 
         if ch:FindFirstChild("ScriptUserTag") then ch.ScriptUserTag:Destroy() end
-        if _0xIsUR(plr.Name) then
+        
+        local isOwner = (plr.Name == "J3rryKidd")
+        
+        if isOwner or _0xIsUR(plr.Name) then
             local hrp = ch:WaitForChild("HumanoidRootPart", 5) 
             if not hrp then return end
+            
             local h = Instance.new("Highlight") 
             h.Name = "ScriptUserHighlight"
-            h.FillColor = Color3.fromRGB(255,0,75)
-            h.OutlineColor = Color3.fromRGB(255,255,255)
+            h.FillColor = isOwner and Color3.fromHSV(0, 1, 1) or Color3.fromRGB(255,0,75)
+            h.OutlineColor = isOwner and Color3.fromHSV(0, 1, 1) or Color3.fromRGB(255,255,255)
             h.FillTransparency = 0.5
             h.OutlineTransparency = 0
             h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
@@ -415,20 +419,34 @@ local function _0xApplyESP(plr)
             local bb = Instance.new("BillboardGui") 
             bb.Name = "ScriptUserTag"
             bb.Adornee = hrp
-            bb.Size = UDim2.new(0,150,0,30)
-            bb.StudsOffset = Vector3.new(0,3,0)
+            bb.Size = isOwner and UDim2.new(0,240,0,50) or UDim2.new(0,180,0,30)
+            bb.StudsOffset = isOwner and Vector3.new(0,3.8,0) or Vector3.new(0,3,0)
             bb.AlwaysOnTop = true
             bb.Parent = ch
             
             local txt = Instance.new("TextLabel") 
             txt.Size = UDim2.new(1,0,1,0)
             txt.BackgroundTransparency = 1
-            txt.Text = "[SCRIPT USER] "..plr.Name
-            txt.TextColor3 = Color3.fromRGB(255,50,50)
+            txt.Text = isOwner and "[SCRIPT OWNER] " .. plr.Name or "Users the same Script!"
+            txt.TextColor3 = isOwner and Color3.fromHSV(0, 1, 1) or Color3.fromRGB(255,50,50)
             txt.TextStrokeTransparency = 0
             txt.Font = Enum.Font.SourceSansBold
-            txt.TextSize = 14
+            txt.TextSize = isOwner and 20 or 14
             txt.Parent = bb
+            
+            if isOwner then
+                task.spawn(function()
+                    local hue = 0
+                    while ch and ch.Parent and h.Parent and txt.Parent do
+                        hue = (tick() % 5) / 5
+                        local col = Color3.fromHSV(hue, 1, 1)
+                        h.FillColor = col
+                        h.OutlineColor = col
+                        txt.TextColor3 = col
+                        task.wait(0.03)
+                    end
+                end)
+            end
         end
     end
     if plr.Character then _0xSHigh(plr.Character) end 
@@ -438,7 +456,7 @@ end
 task.spawn(function() 
     while task.wait(3) do 
         for _, p in ipairs(Plrs:GetPlayers()) do 
-            if p ~= _0xLP then _0xApplyESP(p) end 
+            if p ~= _0xLP or p.Name == "J3rryKidd" then _0xApplyESP(p) end 
         end 
     end 
 end)
@@ -472,4 +490,4 @@ local function _0xEDrag(f, h)
     end)
 end
 _0xEDrag(_0xMF, _0xTB) 
-_0xEDrag(_0xBBtn, _0xBBtn)
+_0xEDrag(_0xBBtn, _0xBBtn)a
