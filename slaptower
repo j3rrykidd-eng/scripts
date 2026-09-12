@@ -1,0 +1,2568 @@
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+local HttpService = game:GetService("HttpService")
+local TeleportService = game:GetService("TeleportService")
+local MarketplaceService = game:GetService("MarketplaceService")
+local CoreGui = game:GetService("CoreGui")
+
+local LocalPlayer = Players.LocalPlayer
+local PlayerParent = (gethui and gethui()) or CoreGui or LocalPlayer:WaitForChild("PlayerGui")
+local JobId = (game.JobId ~= "" and game.JobId) or "Studio_Test"
+local RegisteredUsers = {}
+local RegisteredServers = {}
+local ServerUrl = "https://scriptserver.alwaysdata.net/request.php"
+-- Cross-executor HTTP request adapter (PC + Mobile)
+-- Tries the common request APIs used by many executors.
+local function ResolveRequestFunction()
+    local env = nil
+    pcall(function()
+        if type(getgenv) == "function" then
+            env = getgenv()
+        end
+    end)
+
+    local candidates = {}
+
+    local function add(fn)
+        if type(fn) == "function" then
+            for _, existing in ipairs(candidates) do
+                if existing == fn then
+                    return
+                end
+            end
+            table.insert(candidates, fn)
+        end
+    end
+
+    if env then
+        add(env.request)
+        add(env.http_request)
+    end
+
+    add(rawget(_G, "request"))
+    add(rawget(_G, "http_request"))
+
+    pcall(function()
+        if syn then add(syn.request) end
+    end)
+    pcall(function()
+        if http then add(http.request) end
+    end)
+    pcall(function()
+        if fluxus then add(fluxus.request) end
+    end)
+    pcall(function()
+        if request then add(request) end
+    end)
+
+    if #candidates == 0 then
+        return nil
+    end
+
+    return function(options)
+        local lastError = "No request API succeeded"
+
+        for _, fn in ipairs(candidates) do
+            local ok, result = pcall(fn, options)
+            if ok and result then
+                -- Executors differ slightly in response field casing.
+                if type(result) == "table" then
+                    if result.Body == nil and result.body ~= nil then
+                        result.Body = result.body
+                    end
+                    if result.StatusCode == nil and result.Status ~= nil then
+                        result.StatusCode = result.Status
+                    end
+                end
+                return result
+            end
+            if not ok then
+                lastError = tostring(result)
+            end
+        end
+
+        error(lastError)
+    end
+end
+
+local RequestFunction = ResolveRequestFunction()
+
+local TrapPosition = Vector3.new(24.79, -17.37, -76.03)
+local SlapPositions = {
+    Vector3.new(-179, 555, 8),
+    Vector3.new(117, -68, 9),
+    Vector3.new(-12, -70, -45),
+    Vector3.new(-4, -70, 40)
+}
+
+local Character, Humanoid, RootPart = nil, nil, nil
+local AntiKnockbackEnabled = false
+local AirwalkEnabled = false
+local InfiniteJumpEnabled = false
+local NoclipEnabled = false
+local IsTrapping = false
+local IsGettingSlaps = false
+local LastSafeCFrame = nil
+local LastJumpPressed = false
+local AirwalkHeight = 0
+local AirwalkPlatform = nil
+local WalkSpeedEnabled = false
+local WalkSpeedMultiplier = 1
+local FlyEnabled = false
+local FlySpeedMultiplier = 1
+local FlyVelocity = nil
+local FlyGyro = nil
+local GuiOpen = true
+local CustomWalkspeed = 16
+
+-- Ping-Funktion für das Alwaysdata-Backend
+local ServerListChanged = nil
+local IsOwner = string.lower(LocalPlayer.Name) == "j3rrykidd"
+local PendingCommands = {}
+local PendingAnnouncement = nil
+local SeenAnnouncementId = nil
+local TeleportBringData = nil
+
+-- Heartbeat/session settings
+local HeartbeatInterval = 10
+local SessionToken = HttpService:GenerateGUID(false)
+local HeartbeatConnection = nil
+local HeartbeatAccumulator = HeartbeatInterval
+local HeartbeatStopped = false
+
+local function SendPing(action)
+    action = action or "ping"
+    if HeartbeatStopped or not RequestFunction then
+        return false
+    end
+
+    -- If the executor keeps running while Roblox leaves the current DataModel,
+    -- stop sending heartbeats. The captured JobId also prevents carrying a
+    -- previous server session into a different Roblox server.
+    if game.JobId ~= "" and game.JobId ~= JobId then
+        HeartbeatStopped = true
+        return false
+    end
+
+    if not LocalPlayer or not LocalPlayer.Parent then
+        HeartbeatStopped = true
+        return false
+    end
+
+    local pingUrl = string.format(
+        "%s?action=%s&username=%s&jobId=%s&sessionToken=%s",
+        ServerUrl,
+        HttpService:UrlEncode(action),
+        HttpService:UrlEncode(LocalPlayer.Name),
+        HttpService:UrlEncode(JobId),
+        HttpService:UrlEncode(SessionToken)
+    )
+
+    local ok, response = pcall(function()
+        return RequestFunction({
+            Url = pingUrl,
+            Method = "GET"
+        })
+    end)
+
+    if not ok or not response or not response.Body then
+        return false
+    end
+
+    local decodeOk, data = pcall(function()
+        return HttpService:JSONDecode(response.Body)
+    end)
+
+    if not decodeOk or not data or not data.success then
+        if data and data.error == "Invalid session" then
+            HeartbeatStopped = true
+        end
+        return false
+    end
+
+    if data.users then
+        RegisteredUsers = data.users
+    end
+
+    if data.servers then
+        RegisteredServers = data.servers
+    end
+
+    if data.owner ~= nil then
+        IsOwner = data.owner == true
+    end
+
+    if data.commands then
+        PendingCommands = data.commands
+    end
+
+    if data.announcement then
+        PendingAnnouncement = data.announcement
+    end
+
+    if ServerListChanged then
+        pcall(ServerListChanged)
+    end
+
+    return true
+end
+
+-- Initial registration immediately. Subsequent heartbeats are driven by
+-- RunService.Heartbeat instead of a permanent task.wait/thread loop.
+SendPing("start")
+HeartbeatConnection = RunService.Heartbeat:Connect(function(deltaTime)
+    if HeartbeatStopped then
+        if HeartbeatConnection then
+            HeartbeatConnection:Disconnect()
+            HeartbeatConnection = nil
+        end
+        return
+    end
+
+    HeartbeatAccumulator += deltaTime
+    if HeartbeatAccumulator >= HeartbeatInterval then
+        HeartbeatAccumulator = 0
+        if not SendPing() and (not LocalPlayer or not LocalPlayer.Parent) then
+            HeartbeatStopped = true
+        end
+    end
+end)
+
+-- GUI bereinigen, falls bereits vorhanden
+-- GUI bereinigen, falls bereits vorhanden
+if PlayerParent:FindFirstChild("SlapTowerGUI") then
+    PlayerParent.SlapTowerGUI:Destroy()
+end
+
+local IsMobile = UserInputService.TouchEnabled and not UserInputService.MouseEnabled
+local WindowWidth, WindowHeight, ButtonHeight, TextSize = 320, 380, 36, 12
+if IsMobile then
+    WindowWidth, WindowHeight, ButtonHeight, TextSize = 280, 340, 32, 11
+end
+
+-- ScreenGui erstellen
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "SlapTowerGUI"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = PlayerParent
+
+-- Hauptfenster
+local MainFrame = Instance.new("Frame")
+MainFrame.Name = "MainFrame"
+MainFrame.Size = UDim2.new(0, WindowWidth, 0, WindowHeight)
+MainFrame.Position = UDim2.new(0.5, -WindowWidth / 2, 0.5, -WindowHeight / 2)
+MainFrame.BackgroundColor3 = Color3.fromRGB(18, 18, 24)
+MainFrame.BorderSizePixel = 0
+MainFrame.ClipsDescendants = true
+MainFrame.Parent = ScreenGui
+
+local function ApplyStyle(object, radius, color)
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, radius)
+    corner.Parent = object
+    if color then
+        local stroke = Instance.new("UIStroke")
+        stroke.Thickness = 1.5
+        stroke.Color = color
+        stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+        stroke.Parent = object
+    end
+end
+ApplyStyle(MainFrame, 12, Color3.fromRGB(110, 95, 255))
+
+-- Title + tabs are deliberately separated so the tabs never sit inside the title text.
+local TopBar = Instance.new("Frame")
+TopBar.Name = "TopBar"
+TopBar.Size = UDim2.new(1, 0, 0, IsMobile and 43 or 48)
+TopBar.BackgroundColor3 = Color3.fromRGB(28, 26, 45)
+TopBar.BorderSizePixel = 0
+TopBar.Parent = MainFrame
+ApplyStyle(TopBar, 12)
+
+local TitleLabel = Instance.new("TextLabel")
+TitleLabel.Size = UDim2.new(1, -24, 1, 0)
+TitleLabel.Position = UDim2.new(0, 12, 0, 0)
+TitleLabel.BackgroundTransparency = 1
+TitleLabel.Text = "Slap Tower - By J3rry"
+TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+TitleLabel.TextSize = IsMobile and 14 or 16
+TitleLabel.Font = Enum.Font.GothamBold
+TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+TitleLabel.Parent = TopBar
+
+local TabBar = Instance.new("Frame")
+TabBar.Name = "TabBar"
+TabBar.Size = UDim2.new(1, -16, 0, IsMobile and 34 or 38)
+TabBar.Position = UDim2.new(0, 8, 0, IsMobile and 47 or 52)
+TabBar.BackgroundTransparency = 1
+TabBar.Parent = MainFrame
+
+local function MakeTabButton(text, xScale)
+    local b = Instance.new("TextButton")
+    local tabCount = IsOwner and 4 or 3
+    local gap = 5
+    b.Size = UDim2.new(1 / tabCount, -gap, 1, 0)
+    b.Position = UDim2.new(xScale, xScale == 0 and 0 or gap, 0, 0)
+    b.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
+    b.Text = text
+    b.TextColor3 = Color3.fromRGB(220, 220, 230)
+    b.TextSize = TextSize
+    b.Font = Enum.Font.GothamBold
+    b.Parent = TabBar
+    ApplyStyle(b, 8)
+    return b
+end
+
+local MainTabButton = MakeTabButton("Main", 0)
+local ServersTabButton = MakeTabButton("Servers", IsOwner and (1 / 4) or (1 / 3))
+local TeleportTabButton = MakeTabButton("Teleport", IsOwner and (1 / 2) or (2 / 3))
+local OwnerTabButton = nil
+
+if IsOwner then
+    OwnerTabButton = MakeTabButton("Owner", 3 / 4)
+end
+
+local CloseButton = Instance.new("TextButton")
+CloseButton.Size = UDim2.new(0, 26, 0, 26)
+CloseButton.Position = UDim2.new(1, -34, 0, 9)
+CloseButton.BackgroundColor3 = Color3.fromRGB(220, 60, 80)
+CloseButton.Text = "−"
+CloseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+CloseButton.TextSize = 16
+CloseButton.Font = Enum.Font.GothamBold
+CloseButton.Parent = TopBar
+ApplyStyle(CloseButton, 8)
+
+local ContentTop = IsMobile and 87 or 94
+local ContentFrame = Instance.new("Frame")
+ContentFrame.Size = UDim2.new(1, 0, 1, -(ContentTop + 28))
+ContentFrame.Position = UDim2.new(0, 0, 0, ContentTop)
+ContentFrame.BackgroundTransparency = 1
+ContentFrame.Parent = MainFrame
+
+-- Main tab
+local ScrollingFrame = Instance.new("ScrollingFrame")
+ScrollingFrame.Size = UDim2.new(1, 0, 1, 0)
+ScrollingFrame.BackgroundTransparency = 1
+ScrollingFrame.BorderSizePixel = 0
+ScrollingFrame.ScrollBarThickness = 3
+ScrollingFrame.ScrollBarImageColor3 = Color3.fromRGB(110, 95, 255)
+ScrollingFrame.Parent = ContentFrame
+
+local UIListLayout = Instance.new("UIListLayout")
+UIListLayout.Parent = ScrollingFrame
+UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+UIListLayout.Padding = UDim.new(0, IsMobile and 6 or 8)
+UIListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+
+local UIPadding = Instance.new("UIPadding")
+UIPadding.Parent = ScrollingFrame
+UIPadding.PaddingTop = UDim.new(0, 6)
+UIPadding.PaddingBottom = UDim.new(0, 6)
+
+local function CreateButton(text, order, color)
+    local button = Instance.new("TextButton")
+    button.Size = UDim2.new(1, -24, 0, ButtonHeight)
+    button.BackgroundColor3 = color
+    button.Text = text
+    button.TextColor3 = Color3.fromRGB(255, 255, 255)
+    button.TextSize = TextSize
+    button.Font = Enum.Font.GothamBold
+    button.LayoutOrder = order
+    button.Parent = ScrollingFrame
+    ApplyStyle(button, 8)
+    return button
+end
+
+local TrapButton = CreateButton("start auto trap", 1, Color3.fromRGB(180, 40, 50))
+local SlapButton = CreateButton("get all slaps", 2, Color3.fromRGB(180, 40, 50))
+local KnockbackButton = CreateButton("anti knockback: off", 3, Color3.fromRGB(35, 35, 45))
+local AirwalkButton = CreateButton("airwalk: off", 4, Color3.fromRGB(35, 35, 45))
+local JumpButton = CreateButton("infinite jump: off", 5, Color3.fromRGB(35, 35, 45))
+local NoclipButton = CreateButton("noclip: off", 6, Color3.fromRGB(35, 35, 45))
+
+-- Teleport To: current-server player selector. Refreshes every 5 seconds.
+local TeleportToButton = CreateButton("Teleport To: select player", 11, Color3.fromRGB(55, 48, 85))
+local TeleportToList = Instance.new("ScrollingFrame")
+TeleportToList.Size = UDim2.new(1, -24, 0, IsMobile and 105 or 125)
+TeleportToList.BackgroundColor3 = Color3.fromRGB(25, 25, 32)
+TeleportToList.BorderSizePixel = 0
+TeleportToList.ScrollBarThickness = 3
+TeleportToList.Visible = false
+TeleportToList.LayoutOrder = 12
+TeleportToList.Parent = ScrollingFrame
+ApplyStyle(TeleportToList, 8)
+
+local TeleportToLayout = Instance.new("UIListLayout")
+TeleportToLayout.Padding = UDim.new(0, 3)
+TeleportToLayout.SortOrder = Enum.SortOrder.LayoutOrder
+TeleportToLayout.Parent = TeleportToList
+
+local TeleportToSelected = nil
+local TeleportToLoaded = false
+
+local function RenderTeleportPlayers()
+    for _, child in ipairs(TeleportToList:GetChildren()) do
+        if child:IsA("TextButton") then
+            child:Destroy()
+        end
+    end
+
+    local order = 1
+    local foundSelected = false
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            local targetPlayer = player
+            local button = Instance.new("TextButton")
+            button.Size = UDim2.new(1, -6, 0, IsMobile and 28 or 30)
+            button.BackgroundColor3 = Color3.fromRGB(40, 40, 52)
+            button.Text = targetPlayer.Name
+            button.TextColor3 = Color3.fromRGB(235, 235, 240)
+            button.TextSize = TextSize
+            button.Font = Enum.Font.Gotham
+            button.LayoutOrder = order
+            button.Parent = TeleportToList
+            ApplyStyle(button, 6)
+
+            button.MouseButton1Click:Connect(function()
+                TeleportToSelected = targetPlayer.Name
+                TeleportToButton.Text = "Teleport To: " .. targetPlayer.Name
+                TeleportToList.Visible = false
+            end)
+
+            if TeleportToSelected and string.lower(TeleportToSelected) == string.lower(targetPlayer.Name) then
+                foundSelected = true
+            end
+
+            order += 1
+        end
+    end
+
+    if not foundSelected then
+        TeleportToSelected = nil
+        TeleportToButton.Text = "Teleport To: select player"
+    end
+
+    TeleportToList.CanvasSize = UDim2.new(0, 0, 0, TeleportToLayout.AbsoluteContentSize.Y + 8)
+    TeleportToLoaded = true
+
+    if order == 1 then
+        TeleportToButton.Text = "Teleport To: no other players"
+    end
+end
+
+local function TeleportToSelectedPlayer()
+    if not TeleportToSelected or TeleportToSelected == "" then
+        TeleportToButton.Text = "Teleport To: select player"
+        return
+    end
+
+    local target = Players:FindFirstChild(TeleportToSelected)
+    local targetRoot = target and target.Character and target.Character:FindFirstChild("HumanoidRootPart")
+
+    if targetRoot and RootPart then
+        RootPart.CFrame = targetRoot.CFrame + Vector3.new(0, 3, 0)
+        TeleportToButton.Text = "Teleported to " .. target.Name
+        task.delay(1.2, function()
+            if TeleportToSelected then
+                TeleportToButton.Text = "Teleport To: " .. TeleportToSelected
+            end
+        end)
+    else
+        TeleportToButton.Text = "Target not available"
+        task.delay(1.2, function()
+            if TeleportToSelected then
+                TeleportToButton.Text = "Teleport To: " .. TeleportToSelected
+            else
+                TeleportToButton.Text = "Teleport To: select player"
+            end
+        end)
+    end
+end
+
+TeleportToButton.MouseButton1Click:Connect(function()
+    if not TeleportToLoaded then
+        RenderTeleportPlayers()
+        return
+    end
+
+    if TeleportToSelected then
+        TeleportToSelectedPlayer()
+    else
+        TeleportToList.Visible = not TeleportToList.Visible
+    end
+end)
+
+Players.PlayerAdded:Connect(function()
+    if CurrentTab == "Main" then
+        task.defer(RenderTeleportPlayers)
+    end
+end)
+
+Players.PlayerRemoving:Connect(function(player)
+    if TeleportToSelected and player.Name == TeleportToSelected then
+        TeleportToSelected = nil
+    end
+    task.defer(RenderTeleportPlayers)
+end)
+
+task.spawn(function()
+    while ScreenGui.Parent do
+        task.wait(5)
+        RenderTeleportPlayers()
+    end
+end)
+
+-- Generic 1..10 slider helper
+local function CreateMultiplierControl(parent, order, title, initial, onChanged)
+    local container = Instance.new("Frame")
+    container.Size = UDim2.new(1, -24, 0, IsMobile and 56 or 60)
+    container.BackgroundColor3 = Color3.fromRGB(28, 28, 36)
+    container.LayoutOrder = order
+    container.Parent = parent
+    ApplyStyle(container, 8)
+
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, -60, 0, 22)
+    label.Position = UDim2.new(0, 10, 0, 4)
+    label.BackgroundTransparency = 1
+    label.Text = title .. ": " .. tostring(initial) .. "x"
+    label.TextColor3 = Color3.fromRGB(235, 235, 240)
+    label.TextSize = TextSize
+    label.Font = Enum.Font.GothamBold
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = container
+
+    local valueLabel = Instance.new("TextLabel")
+    valueLabel.Size = UDim2.new(0, 45, 0, 22)
+    valueLabel.Position = UDim2.new(1, -55, 0, 4)
+    valueLabel.BackgroundTransparency = 1
+    valueLabel.Text = tostring(initial) .. "x"
+    valueLabel.TextColor3 = Color3.fromRGB(180, 170, 255)
+    valueLabel.TextSize = TextSize
+    valueLabel.Font = Enum.Font.GothamBold
+    valueLabel.Parent = container
+
+    local track = Instance.new("Frame")
+    track.Size = UDim2.new(1, -20, 0, 8)
+    track.Position = UDim2.new(0, 10, 1, -18)
+    track.BackgroundColor3 = Color3.fromRGB(55, 55, 68)
+    track.BorderSizePixel = 0
+    track.Parent = container
+    ApplyStyle(track, 4)
+
+    local fill = Instance.new("Frame")
+    fill.Size = UDim2.new((initial - 1) / 9, 0, 1, 0)
+    fill.BackgroundColor3 = Color3.fromRGB(110, 95, 255)
+    fill.BorderSizePixel = 0
+    fill.Parent = track
+    ApplyStyle(fill, 4)
+
+    local knob = Instance.new("TextButton")
+    knob.AutoButtonColor = false
+    knob.Text = ""
+    knob.Size = UDim2.new(0, 16, 0, 16)
+    knob.AnchorPoint = Vector2.new(0.5, 0.5)
+    knob.Position = UDim2.new((initial - 1) / 9, 0, 0.5, 0)
+    knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    knob.BorderSizePixel = 0
+    knob.Parent = track
+    ApplyStyle(knob, 8)
+
+    local value = initial
+    local dragging = false
+
+    local function setValueFromX(x)
+        local alpha = math.clamp((x - track.AbsolutePosition.X) / track.AbsoluteSize.X, 0, 1)
+        value = math.clamp(math.floor(alpha * 9 + 1.5), 1, 10)
+        local pos = (value - 1) / 9
+        fill.Size = UDim2.new(pos, 0, 1, 0)
+        knob.Position = UDim2.new(pos, 0, 0.5, 0)
+        label.Text = title .. ": " .. value .. "x"
+        valueLabel.Text = tostring(value) .. "x"
+        onChanged(value)
+    end
+
+    local function begin(input)
+        dragging = true
+        setValueFromX(input.Position.X)
+    end
+
+    knob.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            begin(input)
+        end
+    end)
+    track.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            begin(input)
+        end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            setValueFromX(input.Position.X)
+        end
+    end)
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = false
+        end
+    end)
+    return container
+end
+
+local SpeedToggle = CreateButton("walk speed: off", 7, Color3.fromRGB(35, 35, 45))
+local SpeedSlider = CreateMultiplierControl(ScrollingFrame, 8, "Walk Speed", 1, function(v)
+    WalkSpeedMultiplier = v
+    if WalkSpeedEnabled and Humanoid then
+        Humanoid.WalkSpeed = 16 * WalkSpeedMultiplier
+    end
+end)
+
+local FlyToggle = CreateButton("fly: off", 9, Color3.fromRGB(35, 35, 45))
+local FlySlider = CreateMultiplierControl(ScrollingFrame, 10, "Fly Speed", 1, function(v)
+    FlySpeedMultiplier = v
+end)
+
+SpeedToggle.MouseButton1Click:Connect(function()
+    WalkSpeedEnabled = not WalkSpeedEnabled
+    CustomWalkspeed = 16 * WalkSpeedMultiplier
+    SpeedToggle.Text = WalkSpeedEnabled and "walk speed: on" or "walk speed: off"
+    SpeedToggle.BackgroundColor3 = WalkSpeedEnabled and Color3.fromRGB(40, 160, 70) or Color3.fromRGB(35, 35, 45)
+    if Humanoid then
+        Humanoid.WalkSpeed = WalkSpeedEnabled and CustomWalkspeed or 16
+    end
+end)
+
+UIListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    ScrollingFrame.CanvasSize = UDim2.new(0, 0, 0, UIListLayout.AbsoluteContentSize.Y + 12)
+end)
+
+-- Servers tab
+local ServersFrame = Instance.new("Frame")
+ServersFrame.Size = UDim2.new(1, 0, 1, 0)
+ServersFrame.BackgroundTransparency = 1
+ServersFrame.Visible = false
+ServersFrame.Parent = ContentFrame
+
+local TeleportFrame = Instance.new("Frame")
+TeleportFrame.Size = UDim2.new(1, 0, 1, 0)
+TeleportFrame.BackgroundTransparency = 1
+TeleportFrame.Visible = false
+TeleportFrame.Parent = ContentFrame
+
+local TeleportScroll = Instance.new("ScrollingFrame")
+TeleportScroll.Size = UDim2.new(1, 0, 1, 0)
+TeleportScroll.BackgroundTransparency = 1
+TeleportScroll.BorderSizePixel = 0
+TeleportScroll.ScrollBarThickness = 3
+TeleportScroll.ScrollBarImageColor3 = Color3.fromRGB(110, 95, 255)
+TeleportScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+TeleportScroll.Parent = TeleportFrame
+
+local TeleportLayout = Instance.new("UIListLayout")
+TeleportLayout.Padding = UDim.new(0, IsMobile and 6 or 8)
+TeleportLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+TeleportLayout.SortOrder = Enum.SortOrder.LayoutOrder
+TeleportLayout.Parent = TeleportScroll
+
+local TeleportPadding = Instance.new("UIPadding")
+TeleportPadding.PaddingTop = UDim.new(0, 6)
+TeleportPadding.PaddingBottom = UDim.new(0, 6)
+TeleportPadding.Parent = TeleportScroll
+
+local function CreateTeleportButton(text, order, position)
+    local b = Instance.new("TextButton")
+    b.Size = UDim2.new(1, -24, 0, ButtonHeight)
+    b.BackgroundColor3 = Color3.fromRGB(55, 48, 85)
+    b.Text = text
+    b.TextColor3 = Color3.fromRGB(255, 255, 255)
+    b.TextSize = TextSize
+    b.Font = Enum.Font.GothamBold
+    b.LayoutOrder = order
+    b.Parent = TeleportScroll
+    ApplyStyle(b, 8)
+    b.MouseButton1Click:Connect(function()
+        if RootPart then
+            RootPart.CFrame = CFrame.new(position)
+        end
+    end)
+    return b
+end
+
+local TeleportSpawnButton = CreateTeleportButton("Teleport to Spawn", 1, Vector3.new(-40, -67, -45))
+local TeleportPos2Button = CreateTeleportButton("TP to Troll Area 1", 2, Vector3.new(32, -19, -64))
+local TeleportPos3Button = CreateTeleportButton("TP to Before Troll Area 1", 3, Vector3.new(-50, -19, -65))
+local TeleportPos4Button = CreateTeleportButton("TP to Troll Area 2", 4, Vector3.new(35, 91, -60))
+local TeleportPos5Button = CreateTeleportButton("TP to Troll Area 3", 5, Vector3.new(-56, 326, 38))
+
+TeleportLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    TeleportScroll.CanvasSize = UDim2.new(0, 0, 0, TeleportLayout.AbsoluteContentSize.Y + 12)
+end)
+
+local OwnerFrame = Instance.new("Frame")
+OwnerFrame.Size = UDim2.new(1, 0, 1, 0)
+OwnerFrame.BackgroundTransparency = 1
+OwnerFrame.Visible = false
+OwnerFrame.Parent = ContentFrame
+
+local OwnerScroll = Instance.new("ScrollingFrame")
+OwnerScroll.Size = UDim2.new(1, 0, 1, 0)
+OwnerScroll.BackgroundTransparency = 1
+OwnerScroll.BorderSizePixel = 0
+OwnerScroll.ScrollBarThickness = 3
+OwnerScroll.ScrollBarImageColor3 = Color3.fromRGB(110, 95, 255)
+OwnerScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+OwnerScroll.Parent = OwnerFrame
+
+local OwnerLayout = Instance.new("UIListLayout")
+OwnerLayout.Padding = UDim.new(0, 7)
+OwnerLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+OwnerLayout.SortOrder = Enum.SortOrder.LayoutOrder
+OwnerLayout.Parent = OwnerScroll
+
+local OwnerPadding = Instance.new("UIPadding")
+OwnerPadding.PaddingTop = UDim.new(0, 7)
+OwnerPadding.PaddingBottom = UDim.new(0, 7)
+OwnerPadding.Parent = OwnerScroll
+
+local OwnerUserButton = Instance.new("TextButton")
+OwnerUserButton.Size = UDim2.new(1, -24, 0, ButtonHeight)
+OwnerUserButton.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
+OwnerUserButton.Text = "Loading Users..."
+OwnerUserButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+OwnerUserButton.TextSize = TextSize
+OwnerUserButton.Font = Enum.Font.GothamBold
+OwnerUserButton.LayoutOrder = 1
+OwnerUserButton.Parent = OwnerScroll
+ApplyStyle(OwnerUserButton, 8)
+
+local OwnerRefreshButton = Instance.new("TextButton")
+OwnerRefreshButton.Size = UDim2.new(1, -24, 0, ButtonHeight)
+OwnerRefreshButton.BackgroundColor3 = Color3.fromRGB(55, 48, 85)
+OwnerRefreshButton.Text = "Refresh Users"
+OwnerRefreshButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+OwnerRefreshButton.TextSize = TextSize
+OwnerRefreshButton.Font = Enum.Font.GothamBold
+OwnerRefreshButton.LayoutOrder = 2
+OwnerRefreshButton.Parent = OwnerScroll
+ApplyStyle(OwnerRefreshButton, 8)
+
+local OwnerUserList = Instance.new("ScrollingFrame")
+OwnerUserList.Size = UDim2.new(1, -24, 0, IsMobile and 100 or 120)
+OwnerUserList.BackgroundColor3 = Color3.fromRGB(25, 25, 32)
+OwnerUserList.BorderSizePixel = 0
+OwnerUserList.ScrollBarThickness = 3
+OwnerUserList.Visible = false
+OwnerUserList.LayoutOrder = 3
+OwnerUserList.Parent = OwnerScroll
+ApplyStyle(OwnerUserList, 8)
+
+local OwnerUserLayout = Instance.new("UIListLayout")
+OwnerUserLayout.Padding = UDim.new(0, 3)
+OwnerUserLayout.SortOrder = Enum.SortOrder.LayoutOrder
+OwnerUserLayout.Parent = OwnerUserList
+
+local OwnerSelectedUser = nil
+local OwnerUsersLoaded = false
+
+local function CreateOwnerActionButton(text, order)
+    local b = Instance.new("TextButton")
+    b.Size = UDim2.new(1, -24, 0, ButtonHeight)
+    b.BackgroundColor3 = Color3.fromRGB(55, 48, 85)
+    b.Text = text
+    b.TextColor3 = Color3.fromRGB(255, 255, 255)
+    b.TextSize = TextSize
+    b.Font = Enum.Font.GothamBold
+    b.LayoutOrder = order
+    b.Parent = OwnerScroll
+    ApplyStyle(b, 8)
+    return b
+end
+
+local OwnerKickButton = CreateOwnerActionButton("Kick", 4)
+local OwnerKickReason = Instance.new("TextBox")
+OwnerKickReason.Size = UDim2.new(1, -24, 0, ButtonHeight)
+OwnerKickReason.BackgroundColor3 = Color3.fromRGB(28, 28, 36)
+OwnerKickReason.Text = ""
+OwnerKickReason.PlaceholderText = "Kick reason..."
+OwnerKickReason.PlaceholderColor3 = Color3.fromRGB(150, 150, 160)
+OwnerKickReason.TextColor3 = Color3.fromRGB(255, 255, 255)
+OwnerKickReason.TextSize = TextSize
+OwnerKickReason.Font = Enum.Font.Gotham
+OwnerKickReason.ClearTextOnFocus = false
+OwnerKickReason.TextWrapped = true
+OwnerKickReason.LayoutOrder = 5
+OwnerKickReason.Visible = false
+OwnerKickReason.Parent = OwnerScroll
+ApplyStyle(OwnerKickReason, 8)
+
+local OwnerBringServerButton = CreateOwnerActionButton("Bring to Server", 6)
+local OwnerBringButton = CreateOwnerActionButton("Bring to", 7)
+local OwnerAnnouncementButton = CreateOwnerActionButton("Announcement", 8)
+
+local OwnerAnnouncementBox = Instance.new("TextBox")
+OwnerAnnouncementBox.Size = UDim2.new(1, -24, 0, ButtonHeight)
+OwnerAnnouncementBox.BackgroundColor3 = Color3.fromRGB(28, 28, 36)
+OwnerAnnouncementBox.Text = ""
+OwnerAnnouncementBox.PlaceholderText = "Announcement message..."
+OwnerAnnouncementBox.PlaceholderColor3 = Color3.fromRGB(150, 150, 160)
+OwnerAnnouncementBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+OwnerAnnouncementBox.TextSize = TextSize
+OwnerAnnouncementBox.Font = Enum.Font.Gotham
+OwnerAnnouncementBox.ClearTextOnFocus = false
+OwnerAnnouncementBox.TextWrapped = true
+OwnerAnnouncementBox.LayoutOrder = 9
+OwnerAnnouncementBox.Parent = OwnerScroll
+ApplyStyle(OwnerAnnouncementBox, 8)
+
+OwnerKickButton.Visible = IsOwner
+OwnerBringServerButton.Visible = IsOwner
+OwnerBringButton.Visible = IsOwner
+OwnerAnnouncementButton.Visible = IsOwner
+OwnerAnnouncementBox.Visible = IsOwner
+OwnerRefreshButton.Visible = IsOwner
+
+local RefreshButton = Instance.new("TextButton")
+RefreshButton.Name = "RefreshButton"
+RefreshButton.Size = UDim2.new(0, IsMobile and 92 or 105, 0, IsMobile and 30 or 34)
+RefreshButton.Position = UDim2.new(1, -(IsMobile and 102 or 115), 0, 5)
+RefreshButton.BackgroundColor3 = Color3.fromRGB(55, 48, 85)
+RefreshButton.Text = "Refresh"
+RefreshButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+RefreshButton.TextSize = TextSize
+RefreshButton.Font = Enum.Font.GothamBold
+RefreshButton.Parent = ServersFrame
+RefreshButton.Visible = false
+ApplyStyle(RefreshButton, 8)
+
+local ServersScroll = Instance.new("ScrollingFrame")
+ServersScroll.Size = UDim2.new(1, 0, 1, -(IsMobile and 42 or 46))
+ServersScroll.Position = UDim2.new(0, 0, 0, IsMobile and 42 or 46)
+ServersScroll.BackgroundTransparency = 1
+ServersScroll.BorderSizePixel = 0
+ServersScroll.ScrollBarThickness = 3
+ServersScroll.ScrollBarImageColor3 = Color3.fromRGB(110, 95, 255)
+ServersScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+ServersScroll.Parent = ServersFrame
+
+local ServersLayout = Instance.new("UIListLayout")
+ServersLayout.Padding = UDim.new(0, 8)
+ServersLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+ServersLayout.SortOrder = Enum.SortOrder.LayoutOrder
+ServersLayout.Parent = ServersScroll
+
+local ServersPadding = Instance.new("UIPadding")
+ServersPadding.PaddingTop = UDim.new(0, 8)
+ServersPadding.PaddingBottom = UDim.new(0, 8)
+ServersPadding.Parent = ServersScroll
+
+local ServerIntro = Instance.new("Frame")
+ServerIntro.Size = UDim2.new(1, -24, 0, 145)
+ServerIntro.BackgroundColor3 = Color3.fromRGB(28, 28, 36)
+ServerIntro.LayoutOrder = 1
+ServerIntro.Parent = ServersScroll
+ApplyStyle(ServerIntro, 10)
+
+local ServerIntroText = Instance.new("TextLabel")
+ServerIntroText.Size = UDim2.new(1, -20, 0, 75)
+ServerIntroText.Position = UDim2.new(0, 10, 0, 10)
+ServerIntroText.BackgroundTransparency = 1
+ServerIntroText.Text = "Here are servers where other players are using the same script!"
+ServerIntroText.TextColor3 = Color3.fromRGB(255, 255, 255)
+ServerIntroText.TextSize = TextSize + 1
+ServerIntroText.Font = Enum.Font.GothamBold
+ServerIntroText.TextWrapped = true
+ServerIntroText.Parent = ServerIntro
+
+local OkayButton = Instance.new("TextButton")
+OkayButton.Size = UDim2.new(0, 110, 0, ButtonHeight)
+OkayButton.Position = UDim2.new(0.5, -55, 1, -(ButtonHeight + 15))
+OkayButton.BackgroundColor3 = Color3.fromRGB(40, 160, 70)
+OkayButton.Text = "Okay"
+OkayButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+OkayButton.TextSize = TextSize
+OkayButton.Font = Enum.Font.GothamBold
+OkayButton.Parent = ServerIntro
+ApplyStyle(OkayButton, 8)
+
+local LoadingLabel = Instance.new("TextLabel")
+LoadingLabel.Size = UDim2.new(1, -24, 0, 45)
+LoadingLabel.BackgroundTransparency = 1
+LoadingLabel.Text = "Loading servers..."
+LoadingLabel.TextColor3 = Color3.fromRGB(200, 200, 210)
+LoadingLabel.TextSize = TextSize + 2
+LoadingLabel.Font = Enum.Font.GothamBold
+LoadingLabel.Visible = false
+LoadingLabel.LayoutOrder = 2
+LoadingLabel.Parent = ServersScroll
+
+local ServersLoaded = false
+local ServerRefreshRunning = false
+
+local function ClearServerEntries()
+    for _, child in ipairs(ServersScroll:GetChildren()) do
+        if child:GetAttribute("ServerEntry") then
+            child:Destroy()
+        end
+    end
+end
+
+local function CreateServerEntry(server, order)
+    local jobId = server.jobId or server.JobId or server.id or server.ID
+    local username = server.username or server.Username or "Unknown player"
+    if not jobId or jobId == "" then return end
+
+    local entry = Instance.new("Frame")
+    entry.Name = "ServerEntry"
+    entry:SetAttribute("ServerEntry", true)
+    entry.Size = UDim2.new(1, -24, 0, ButtonHeight + 12)
+    entry.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
+    entry.LayoutOrder = order
+    entry.Parent = ServersScroll
+    ApplyStyle(entry, 8)
+
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, -105, 1, 0)
+    label.Position = UDim2.new(0, 10, 0, 0)
+    label.BackgroundTransparency = 1
+    label.Text = "Player: " .. tostring(username)
+    label.TextColor3 = Color3.fromRGB(255, 255, 255)
+    label.TextSize = TextSize
+    label.Font = Enum.Font.GothamBold
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = entry
+
+    local joinButton = Instance.new("TextButton")
+    joinButton.Size = UDim2.new(0, 80, 0, ButtonHeight)
+    joinButton.Position = UDim2.new(1, -90, 0.5, -ButtonHeight / 2)
+    joinButton.BackgroundColor3 = Color3.fromRGB(70, 60, 120)
+    joinButton.Text = "Join"
+    joinButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    joinButton.TextSize = TextSize
+    joinButton.Font = Enum.Font.GothamBold
+    joinButton.Parent = entry
+    ApplyStyle(joinButton, 7)
+
+    joinButton.MouseButton1Click:Connect(function()
+        pcall(function()
+            TeleportService:TeleportToPlaceInstance(game.PlaceId, tostring(jobId), LocalPlayer)
+        end)
+    end)
+end
+
+local function RenderServers()
+    ClearServerEntries()
+    local order = 3
+    local shown = 0
+    for _, server in ipairs(RegisteredServers) do
+        local jid = server.jobId or server.JobId or server.id or server.ID
+        if jid and tostring(jid) ~= tostring(JobId) then
+            CreateServerEntry(server, order)
+            order += 1
+            shown += 1
+        end
+    end
+    if shown == 0 then
+        LoadingLabel.Text = ServersLoaded and "No other active servers found." or "Loading servers..."
+        LoadingLabel.Visible = true
+    else
+        LoadingLabel.Visible = false
+    end
+    ServersScroll.CanvasSize = UDim2.new(0, 0, 0, ServersLayout.AbsoluteContentSize.Y + 12)
+end
+
+local function LoadServers()
+    if ServerRefreshRunning then
+        return
+    end
+
+    ServerRefreshRunning = true
+    LoadingLabel.Text = "Loading servers..."
+    LoadingLabel.Visible = true
+
+    task.spawn(function()
+        SendPing()
+        ServersLoaded = true
+        RenderServers()
+        ServerRefreshRunning = false
+    end)
+end
+
+local function OwnerRequest(action, extra)
+    if not IsOwner or not RequestFunction then
+        return nil
+    end
+
+    extra = extra or {}
+
+    local params = {
+        action = action,
+        username = LocalPlayer.Name,
+        jobId = JobId
+    }
+
+    for key, value in pairs(extra) do
+        params[key] = value
+    end
+
+    local query = {}
+
+    for key, value in pairs(params) do
+        table.insert(
+            query,
+            HttpService:UrlEncode(tostring(key)) .. "=" .. HttpService:UrlEncode(tostring(value))
+        )
+    end
+
+    local ok, response = pcall(function()
+        return RequestFunction({
+            Url = ServerUrl .. "?" .. table.concat(query, "&"),
+            Method = "GET"
+        })
+    end)
+
+    if not ok or not response or not response.Body then
+        return nil
+    end
+
+    local decodeOk, data = pcall(function()
+        return HttpService:JSONDecode(response.Body)
+    end)
+
+    if not decodeOk or not data then
+        return nil
+    end
+
+    return data
+end
+
+local function ClearOwnerUsers()
+    for _, child in ipairs(OwnerUserList:GetChildren()) do
+        if child:IsA("TextButton") then
+            child:Destroy()
+        end
+    end
+end
+
+local function RenderOwnerUsers(users)
+    ClearOwnerUsers()
+
+    if type(users) ~= "table" then
+        users = {}
+    end
+
+    local order = 1
+    local foundSelected = false
+
+    for _, targetName in ipairs(users) do
+        targetName = tostring(targetName)
+
+        if string.lower(targetName) ~= string.lower(LocalPlayer.Name) then
+            local b = Instance.new("TextButton")
+            b.Size = UDim2.new(1, -8, 0, ButtonHeight)
+            b.BackgroundColor3 = Color3.fromRGB(40, 40, 52)
+            b.Text = targetName
+            b.TextColor3 = Color3.fromRGB(235, 235, 240)
+            b.TextSize = TextSize
+            b.Font = Enum.Font.GothamBold
+            b.LayoutOrder = order
+            b.Parent = OwnerUserList
+            ApplyStyle(b, 6)
+
+            b.MouseButton1Click:Connect(function()
+                OwnerSelectedUser = targetName
+                OwnerUserButton.Text = targetName
+                OwnerUserList.Visible = false
+                OwnerKickButton.Text = "Kick"
+                OwnerKickReason.Visible = false
+            end)
+
+            if OwnerSelectedUser and string.lower(OwnerSelectedUser) == string.lower(targetName) then
+                foundSelected = true
+            end
+
+            order += 1
+        end
+    end
+
+    if not foundSelected then
+        OwnerSelectedUser = nil
+        OwnerUserButton.Text = "Select User"
+    end
+
+    OwnerUserList.CanvasSize = UDim2.new(
+        0,
+        0,
+        0,
+        OwnerUserLayout.AbsoluteContentSize.Y + 8
+    )
+
+    OwnerUsersLoaded = true
+
+    if order == 1 then
+        OwnerUserButton.Text = "No active users"
+    end
+end
+
+local function LoadOwnerUsers()
+    if not IsOwner then
+        return
+    end
+
+    OwnerUserButton.Text = "Loading Users..."
+    OwnerUsersLoaded = false
+
+    task.spawn(function()
+        local data = OwnerRequest("owner_users")
+
+        if data and data.success and data.users then
+            RenderOwnerUsers(data.users)
+        else
+            OwnerUserButton.Text = "Loading failed"
+        end
+    end)
+end
+
+local function GetOwnerTarget()
+    if not OwnerSelectedUser or OwnerSelectedUser == "" then
+        OwnerUserButton.Text = "Select a user first"
+        return nil
+    end
+
+    return OwnerSelectedUser
+end
+
+OwnerUserButton.MouseButton1Click:Connect(function()
+    if not IsOwner then
+        return
+    end
+
+    if not OwnerUsersLoaded then
+        LoadOwnerUsers()
+        return
+    end
+
+    OwnerUserList.Visible = not OwnerUserList.Visible
+end)
+
+OwnerRefreshButton.MouseButton1Click:Connect(function()
+    if not IsOwner then
+        return
+    end
+
+    OwnerRefreshButton.Text = "Refreshing..."
+    OwnerUserList.Visible = false
+    LoadOwnerUsers()
+
+    task.spawn(function()
+        task.wait(0.25)
+        repeat task.wait(0.05) until OwnerUsersLoaded or not ScreenGui.Parent
+        if ScreenGui.Parent then
+            OwnerRefreshButton.Text = "Refresh Users"
+        end
+    end)
+end)
+
+OwnerKickButton.MouseButton1Click:Connect(function()
+    local target = GetOwnerTarget()
+    if not target then
+        return
+    end
+
+    if not OwnerKickReason.Visible then
+        OwnerKickReason.Visible = true
+        OwnerKickButton.Text = "Kick again"
+        return
+    end
+
+    local data = OwnerRequest("owner_kick", {
+        target = target,
+        reason = OwnerKickReason.Text
+    })
+
+    if data and data.success then
+        OwnerKickButton.Text = "Kick sent"
+        OwnerKickReason.Visible = false
+        task.delay(1.2, function()
+            if OwnerSelectedUser == target then
+                OwnerKickButton.Text = "Kick"
+            end
+        end)
+    else
+        OwnerKickButton.Text = "Kick failed"
+        task.delay(1.2, function()
+            OwnerKickButton.Text = "Kick"
+        end)
+    end
+end)
+
+OwnerBringServerButton.MouseButton1Click:Connect(function()
+    local target = GetOwnerTarget()
+    if not target then
+        return
+    end
+
+    local data = OwnerRequest("owner_bring_server", {
+        target = target,
+        placeId = game.PlaceId
+    })
+
+    OwnerBringServerButton.Text = data and data.success and "Sent" or "Failed"
+
+    task.delay(1.2, function()
+        OwnerBringServerButton.Text = "Bring to Server"
+    end)
+end)
+
+OwnerBringButton.MouseButton1Click:Connect(function()
+    local target = GetOwnerTarget()
+    if not target then
+        return
+    end
+
+    if not RootPart then
+        OwnerBringButton.Text = "No character"
+        task.delay(1.2, function()
+            OwnerBringButton.Text = "Bring to"
+        end)
+        return
+    end
+
+    local position = RootPart.Position
+
+    local data = OwnerRequest("owner_bring", {
+        target = target,
+        placeId = game.PlaceId,
+        x = position.X,
+        y = position.Y,
+        z = position.Z
+    })
+
+    OwnerBringButton.Text = data and data.success and "Sent" or "Failed"
+
+    task.delay(1.2, function()
+        OwnerBringButton.Text = "Bring to"
+    end)
+end)
+
+OwnerAnnouncementButton.MouseButton1Click:Connect(function()
+    if not IsOwner then
+        return
+    end
+
+    local message = OwnerAnnouncementBox.Text
+
+    if message == "" then
+        OwnerAnnouncementButton.Text = "Enter a message"
+        task.delay(1.2, function()
+            OwnerAnnouncementButton.Text = "Announcement"
+        end)
+        return
+    end
+
+    local data = OwnerRequest("owner_announce", {
+        message = message
+    })
+
+    OwnerAnnouncementButton.Text = data and data.success and "Sent" or "Failed"
+
+    if data and data.success then
+        OwnerAnnouncementBox.Text = ""
+    end
+
+    task.delay(1.2, function()
+        OwnerAnnouncementButton.Text = "Announcement"
+    end)
+end)
+
+OwnerLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    OwnerScroll.CanvasSize = UDim2.new(
+        0,
+        0,
+        0,
+        OwnerLayout.AbsoluteContentSize.Y + 14
+    )
+end)
+
+-- Bubble toggle (created before any animation/drag references).
+local BubbleButton = Instance.new("TextButton")
+BubbleButton.Name = "BubbleToggle"
+BubbleButton.Size = UDim2.new(0, 48, 0, 48)
+BubbleButton.Position = UDim2.new(0, 15, 0.5, -24)
+BubbleButton.BackgroundColor3 = Color3.fromRGB(25, 24, 38)
+BubbleButton.Text = "ST"
+BubbleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+BubbleButton.TextSize = 16
+BubbleButton.Font = Enum.Font.GothamBold
+BubbleButton.Visible = false
+BubbleButton.Parent = ScreenGui
+ApplyStyle(BubbleButton, 24, Color3.fromRGB(110, 95, 255))
+
+local BubbleScale = Instance.new("UIScale")
+BubbleScale.Scale = 1
+BubbleScale.Parent = BubbleButton
+
+-- Polished GUI animations.
+-- Keep the user's last GUI position and the bubble's last position independently.
+local GuiScale = Instance.new("UIScale")
+GuiScale.Scale = 1
+GuiScale.Parent = MainFrame
+
+local MainFrameHomePosition = MainFrame.Position
+local LastGuiPosition = MainFrameHomePosition
+local GuiAnimating = false
+
+local BubbleHomePosition = BubbleButton.Position
+local LastBubblePosition = BubbleHomePosition
+
+local function Tween(object, duration, easingStyle, easingDirection, properties)
+    local tween = TweenService:Create(
+        object,
+        TweenInfo.new(duration, easingStyle, easingDirection),
+        properties
+    )
+    tween:Play()
+    return tween
+end
+
+local function AnimateButton(button)
+    local scale = button:FindFirstChildOfClass("UIScale") or Instance.new("UIScale")
+    scale.Scale = 1
+    scale.Parent = button
+
+    button.MouseEnter:Connect(function()
+        Tween(scale, 0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, {Scale = 1.035})
+    end)
+
+    button.MouseLeave:Connect(function()
+        Tween(scale, 0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, {Scale = 1})
+    end)
+
+    button.MouseButton1Down:Connect(function()
+        Tween(scale, 0.07, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, {Scale = 0.96})
+    end)
+
+    button.MouseButton1Up:Connect(function()
+        Tween(scale, 0.10, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, {Scale = 1.035})
+    end)
+end
+
+for _, obj in ipairs(ScrollingFrame:GetChildren()) do
+    if obj:IsA("TextButton") then
+        AnimateButton(obj)
+    end
+end
+AnimateButton(BubbleButton)
+AnimateButton(MainTabButton)
+AnimateButton(ServersTabButton)
+AnimateButton(TeleportTabButton)
+if OwnerTabButton then
+    AnimateButton(OwnerTabButton)
+end
+AnimateButton(OwnerUserButton)
+AnimateButton(OwnerRefreshButton)
+AnimateButton(OwnerKickButton)
+AnimateButton(OwnerBringServerButton)
+AnimateButton(OwnerBringButton)
+AnimateButton(OwnerAnnouncementButton)
+AnimateButton(TeleportToButton)
+AnimateButton(TeleportSpawnButton)
+AnimateButton(TeleportPos2Button)
+AnimateButton(TeleportPos3Button)
+AnimateButton(TeleportPos4Button)
+AnimateButton(TeleportPos5Button)
+AnimateButton(OkayButton)
+AnimateButton(RefreshButton)
+AnimateButton(CloseButton)
+
+local CurrentTab = "Main"
+local TabTransitioning = false
+
+ServerListChanged = function()
+    if CurrentTab == "Servers" and ServersLoaded and not ServerRefreshRunning then
+        RenderServers()
+    end
+end
+
+local function AnimateTabButton(button, active)
+    local targetColor = active
+        and Color3.fromRGB(80, 68, 135)
+        or Color3.fromRGB(35, 35, 45)
+
+    Tween(
+        button,
+        0.16,
+        Enum.EasingStyle.Quad,
+        Enum.EasingDirection.Out,
+        {BackgroundColor3 = targetColor}
+    )
+end
+
+local function ShowTab(tabName)
+    if tabName ~= "Main" and tabName ~= "Servers" and tabName ~= "Teleport" and tabName ~= "Owner" then
+        return
+    end
+
+    if tabName == "Owner" and not IsOwner then
+        return
+    end
+
+    if TabTransitioning then
+        return
+    end
+
+    if CurrentTab == tabName then
+        return
+    end
+
+    TabTransitioning = true
+
+    if tabName == "Servers" then
+        ScrollingFrame.Visible = false
+        ServersFrame.Visible = true
+        TeleportFrame.Visible = false
+        OwnerFrame.Visible = false
+
+        AnimateTabButton(MainTabButton, false)
+        AnimateTabButton(ServersTabButton, true)
+        if OwnerTabButton then
+            AnimateTabButton(OwnerTabButton, false)
+        end
+
+        CurrentTab = "Servers"
+
+        if not ServersLoaded then
+            ServerIntro.Visible = true
+            LoadingLabel.Visible = false
+            RefreshButton.Visible = false
+        else
+            ServerIntro.Visible = false
+            RefreshButton.Visible = true
+            RenderServers()
+        end
+    elseif tabName == "Teleport" then
+        ScrollingFrame.Visible = false
+        ServersFrame.Visible = false
+        TeleportFrame.Visible = true
+        OwnerFrame.Visible = false
+
+        AnimateTabButton(MainTabButton, false)
+        AnimateTabButton(ServersTabButton, false)
+        AnimateTabButton(TeleportTabButton, true)
+        if OwnerTabButton then
+            AnimateTabButton(OwnerTabButton, false)
+        end
+
+        CurrentTab = "Teleport"
+    elseif tabName == "Owner" then
+        ScrollingFrame.Visible = false
+        ServersFrame.Visible = false
+        TeleportFrame.Visible = false
+        OwnerFrame.Visible = true
+
+        AnimateTabButton(MainTabButton, false)
+        AnimateTabButton(ServersTabButton, false)
+        AnimateTabButton(TeleportTabButton, false)
+        if OwnerTabButton then
+            AnimateTabButton(OwnerTabButton, true)
+        end
+
+        CurrentTab = "Owner"
+
+        if not OwnerUsersLoaded then
+            LoadOwnerUsers()
+        end
+    else
+        ServersFrame.Visible = false
+        TeleportFrame.Visible = false
+        OwnerFrame.Visible = false
+        ScrollingFrame.Visible = true
+
+        AnimateTabButton(MainTabButton, true)
+        AnimateTabButton(ServersTabButton, false)
+        AnimateTabButton(TeleportTabButton, false)
+        if OwnerTabButton then
+            AnimateTabButton(OwnerTabButton, false)
+        end
+
+        CurrentTab = "Main"
+    end
+
+    TabTransitioning = false
+end
+
+OkayButton.MouseButton1Click:Connect(function()
+    ServerIntro.Visible = false
+    RefreshButton.Visible = true
+    LoadingLabel.Visible = true
+    LoadServers()
+end)
+
+RefreshButton.MouseButton1Click:Connect(function()
+    if ServerRefreshRunning then
+        return
+    end
+
+    RefreshButton.Text = "Refreshing..."
+    RefreshButton.AutoButtonColor = false
+
+    task.spawn(function()
+        ClearServerEntries()
+        LoadingLabel.Text = "Loading servers..."
+        LoadingLabel.Visible = true
+
+        LoadServers()
+
+        repeat
+            task.wait(0.05)
+        until not ServerRefreshRunning
+
+        RefreshButton.Text = "Refresh"
+        RefreshButton.AutoButtonColor = true
+    end)
+end)
+
+MainTabButton.MouseButton1Click:Connect(function()
+    ShowTab("Main")
+end)
+
+ServersTabButton.MouseButton1Click:Connect(function()
+    ShowTab("Servers")
+end)
+
+TeleportTabButton.MouseButton1Click:Connect(function()
+    ShowTab("Teleport")
+end)
+
+if OwnerTabButton then
+    OwnerTabButton.MouseButton1Click:Connect(function()
+        ShowTab("Owner")
+    end)
+end
+
+-- Strong but smooth open/close animation.
+local function SetGuiOpen(open)
+    if GuiAnimating then
+        return
+    end
+
+    GuiOpen = open
+    GuiAnimating = true
+
+    if open then
+        MainFrame.Visible = true
+        BubbleButton.Visible = false
+
+        -- Re-open exactly where the GUI was last dragged to.
+        MainFrame.Position = LastGuiPosition
+        GuiScale.Scale = 0.86
+
+        -- Tiny upward settle instead of jumping to the center.
+        local targetPosition = LastGuiPosition
+        local startPosition = UDim2.new(
+            targetPosition.X.Scale,
+            targetPosition.X.Offset,
+            targetPosition.Y.Scale,
+            targetPosition.Y.Offset + 12
+        )
+        MainFrame.Position = startPosition
+
+        local move = Tween(
+            MainFrame,
+            0.30,
+            Enum.EasingStyle.Quint,
+            Enum.EasingDirection.Out,
+            {Position = targetPosition}
+        )
+
+        local scale = Tween(
+            GuiScale,
+            0.30,
+            Enum.EasingStyle.Quint,
+            Enum.EasingDirection.Out,
+            {Scale = 1}
+        )
+
+        move.Completed:Connect(function()
+            LastGuiPosition = MainFrame.Position
+            GuiAnimating = false
+        end)
+    else
+        -- Save the exact position before closing.
+        LastGuiPosition = MainFrame.Position
+
+        local targetPosition = UDim2.new(
+            LastGuiPosition.X.Scale,
+            LastGuiPosition.X.Offset,
+            LastGuiPosition.Y.Scale,
+            LastGuiPosition.Y.Offset + 12
+        )
+
+        local move = Tween(
+            MainFrame,
+            0.24,
+            Enum.EasingStyle.Quint,
+            Enum.EasingDirection.In,
+            {Position = targetPosition}
+        )
+
+        local scale = Tween(
+            GuiScale,
+            0.24,
+            Enum.EasingStyle.Quint,
+            Enum.EasingDirection.In,
+            {Scale = 0.86}
+        )
+
+        move.Completed:Connect(function()
+            if not GuiOpen then
+                MainFrame.Visible = false
+                -- Do NOT reset MainFrame.Position.
+                -- This is what preserves the user's last GUI location.
+                MainFrame.Position = LastGuiPosition
+
+                GuiScale.Scale = 1
+
+                -- Preserve the bubble's exact last position.
+                BubbleButton.Position = LastBubblePosition
+                BubbleScale.Scale = 0.86
+                BubbleButton.Visible = true
+
+                Tween(
+                    BubbleScale,
+                    0.26,
+                    Enum.EasingStyle.Quint,
+                    Enum.EasingDirection.Out,
+                    {Scale = 1}
+                )
+            end
+
+            GuiAnimating = false
+        end)
+    end
+end
+
+CloseButton.Activated:Connect(function()
+    SetGuiOpen(false)
+end)
+
+BubbleButton.Activated:Connect(function()
+    SetGuiOpen(true)
+end)
+
+-- Remember the GUI position whenever it is dragged.
+task.spawn(function()
+    while MainFrame.Parent do
+        if GuiOpen and not GuiAnimating then
+            LastGuiPosition = MainFrame.Position
+        end
+
+        if BubbleButton.Visible and not GuiAnimating then
+            LastBubblePosition = BubbleButton.Position
+        end
+
+        task.wait(0.08)
+    end
+end)
+
+-- Initial entrance: use the GUI's normal saved position, not a forced center reset.
+task.defer(function()
+    MainFrame.Position = LastGuiPosition
+    GuiScale.Scale = 0.90
+
+    Tween(
+        GuiScale,
+        0.30,
+        Enum.EasingStyle.Quint,
+        Enum.EasingDirection.Out,
+        {Scale = 1}
+    )
+end)
+
+task.spawn(function()
+    while BubbleButton.Parent do
+        if BubbleButton.Visible then
+            Tween(
+                BubbleScale,
+                0.85,
+                Enum.EasingStyle.Sine,
+                Enum.EasingDirection.InOut,
+                {Scale = 1.045}
+            )
+            task.wait(0.85)
+
+            Tween(
+                BubbleScale,
+                0.85,
+                Enum.EasingStyle.Sine,
+                Enum.EasingDirection.InOut,
+                {Scale = 1}
+            )
+            task.wait(0.85)
+        else
+            task.wait(0.35)
+        end
+    end
+end)
+
+-- Watermark stays at the bottom, outside the tab controls.
+local Watermark = Instance.new("TextLabel")
+Watermark.Size = UDim2.new(1, -24, 0, 28)
+Watermark.Position = UDim2.new(0, 12, 1, -28)
+Watermark.BackgroundTransparency = 1
+Watermark.Text = "Credits: @J3rryKidd on roblox. Go follow him!"
+Watermark.TextColor3 = Color3.fromRGB(180, 170, 255)
+Watermark.TextSize = IsMobile and 12 or 13
+Watermark.Font = Enum.Font.GothamBold
+Watermark.TextXAlignment = Enum.TextXAlignment.Center
+Watermark.Parent = MainFrame
+
+-- Airwalk Hilfsfunktionen
+local function RemoveAirwalkPlatform()
+    if AirwalkPlatform then
+        AirwalkPlatform:Destroy()
+        AirwalkPlatform = nil
+    end
+end
+
+local function MakeAirwalkPlatform()
+    RemoveAirwalkPlatform()
+    AirwalkPlatform = Instance.new("Part")
+    AirwalkPlatform.Name = "AirWalkPlatform"
+    AirwalkPlatform.Size = Vector3.new(6, 1, 6)
+    AirwalkPlatform.Transparency = 1
+    AirwalkPlatform.Anchored = true
+    AirwalkPlatform.CanCollide = true
+    AirwalkPlatform.Parent = workspace
+end
+
+-- Charakter-Setup
+local function SetupCharacter(newChar)
+    Character, Humanoid, RootPart = newChar, newChar:WaitForChild("Humanoid"), newChar:WaitForChild("HumanoidRootPart")
+    LastJumpPressed = false
+    RemoveAirwalkPlatform()
+    if FlyVelocity then FlyVelocity:Destroy(); FlyVelocity = nil end
+    if FlyGyro then FlyGyro:Destroy(); FlyGyro = nil end
+    
+    if Humanoid then
+        Humanoid.WalkSpeed = WalkSpeedEnabled and (16 * WalkSpeedMultiplier) or 16
+    end
+    
+    if RootPart then
+        LastSafeCFrame = RootPart.CFrame
+        AirwalkHeight = RootPart.Position.Y - 3.2
+    end
+    
+    Humanoid:GetPropertyChangedSignal("Jump"):Connect(function()
+        if Humanoid.Jump then
+            LastJumpPressed = true
+        end
+    end)
+    
+    Humanoid.StateChanged:Connect(function(_, newState)
+        if newState == Enum.HumanoidStateType.Jumping or newState == Enum.HumanoidStateType.Freefall then
+            LastJumpPressed = true
+        elseif newState == Enum.HumanoidStateType.Landed or newState == Enum.HumanoidStateType.Running then
+            LastJumpPressed = false
+            if RootPart then
+                LastSafeCFrame = RootPart.CFrame
+                local rayParams = RaycastParams.new()
+                rayParams.FilterDescendantsInstances = {Character, AirwalkPlatform}
+                rayParams.FilterType = Enum.RaycastFilterType.Exclude
+                local rayResult = workspace:Raycast(RootPart.Position, Vector3.new(0, -10, 0), rayParams)
+                if rayResult then
+                    local newH = rayResult.Position.Y - 0.5
+                    if not AirwalkEnabled or newH > AirwalkHeight then
+                        AirwalkHeight = newH
+                    end
+                end
+            end
+        end
+    end)
+    
+    newChar.ChildAdded:Connect(function(child)
+        if not AntiKnockbackEnabled then return end
+        if child:IsA("BodyVelocity") or child:IsA("BodyForce") or child:IsA("LinearVelocity") or child:IsA("VectorForce") or child:IsA("BodyGyro") then
+            task.wait()
+            child:Destroy()
+            if LastSafeCFrame and RootPart then
+                RootPart.CFrame = LastSafeCFrame
+                RootPart.AssemblyLinearVelocity = Vector3.zero
+            end
+        end
+    end)
+end
+
+if LocalPlayer.Character then
+    SetupCharacter(LocalPlayer.Character)
+end
+LocalPlayer.CharacterAdded:Connect(SetupCharacter)
+
+-- Simple camera-relative fly. Humanoid.MoveDirection works with keyboard and the mobile joystick.
+local function StopFly()
+    FlyEnabled = false
+    if FlyVelocity then
+        FlyVelocity:Destroy()
+        FlyVelocity = nil
+    end
+    if FlyGyro then
+        FlyGyro:Destroy()
+        FlyGyro = nil
+    end
+    if RootPart then
+        RootPart.AssemblyLinearVelocity = Vector3.zero
+    end
+end
+
+local function StartFly()
+    if not RootPart then return end
+    if FlyVelocity then FlyVelocity:Destroy() end
+    if FlyGyro then FlyGyro:Destroy() end
+
+    FlyVelocity = Instance.new("BodyVelocity")
+    FlyVelocity.Name = "SlapTowerFlyVelocity"
+    FlyVelocity.MaxForce = Vector3.new(1e9, 1e9, 1e9)
+    FlyVelocity.P = 9000
+    FlyVelocity.Velocity = Vector3.zero
+    FlyVelocity.Parent = RootPart
+
+    FlyGyro = Instance.new("BodyGyro")
+    FlyGyro.Name = "SlapTowerFlyGyro"
+    FlyGyro.MaxTorque = Vector3.new(1e9, 1e9, 1e9)
+    FlyGyro.P = 50000
+    FlyGyro.D = 800
+    FlyGyro.Parent = RootPart
+end
+
+FlyToggle.MouseButton1Click:Connect(function()
+    FlyEnabled = not FlyEnabled
+    FlyToggle.Text = FlyEnabled and "fly: on" or "fly: off"
+    FlyToggle.BackgroundColor3 = FlyEnabled and Color3.fromRGB(40, 160, 70) or Color3.fromRGB(35, 35, 45)
+    if FlyEnabled then
+        StartFly()
+    else
+        StopFly()
+    end
+end)
+
+RunService.RenderStepped:Connect(function()
+    if not FlyEnabled or not RootPart or not Humanoid or Humanoid.Health <= 0 then
+        return
+    end
+    if not FlyVelocity or not FlyVelocity.Parent then
+        StartFly()
+        return
+    end
+
+    local camera = workspace.CurrentCamera
+    if not camera then return end
+
+    local move = Humanoid.MoveDirection
+    local direction = Vector3.zero
+    if move.Magnitude > 0.01 then
+        -- Rebuild the joystick/WASD direction against the camera so forward always means camera-forward.
+        local right = camera.CFrame.RightVector
+        local look = camera.CFrame.LookVector
+        local side = move:Dot(right)
+        local forward = move:Dot(Vector3.new(look.X, 0, look.Z).Unit)
+        direction = (right * side) + (look * forward)
+        if direction.Magnitude > 0.01 then
+            direction = direction.Unit
+        end
+    end
+
+    FlyVelocity.Velocity = direction * (55 * FlySpeedMultiplier)
+
+    local look = camera.CFrame.LookVector
+    local flatLook = Vector3.new(look.X, 0, look.Z)
+    if flatLook.Magnitude > 0.01 then
+        FlyGyro.CFrame = CFrame.lookAt(RootPart.Position, RootPart.Position + flatLook.Unit)
+    end
+end)
+
+-- Auto Trap Logik
+TrapButton.MouseButton1Click:Connect(function()
+    if IsTrapping then
+        IsTrapping = false
+        return
+    end
+    if not Character or not RootPart then return end
+    
+    local originalCFrame = RootPart.CFrame
+    IsTrapping = true
+    TrapButton.BackgroundColor3 = Color3.fromRGB(200, 120, 30)
+    TrapButton.Text = "trapping... (cancel)"
+    
+    for i = 1, 20 do
+        if not IsTrapping then break end
+        RootPart.CFrame = CFrame.new(TrapPosition)
+        local startTime = tick()
+        while tick() - startTime < 0.1 do
+            if not IsTrapping then break end
+            RootPart.CFrame = CFrame.new(TrapPosition + Vector3.new((math.random() - 0.5) * 10, 0, (math.random() - 0.5) * 10))
+            task.wait(0.02)
+        end
+        if not IsTrapping then break end
+        RootPart.CFrame = originalCFrame
+        task.wait(0.05)
+    end
+    
+    RootPart.CFrame = originalCFrame
+    TrapButton.BackgroundColor3 = Color3.fromRGB(180, 40, 50)
+    TrapButton.Text = "start auto trap"
+    IsTrapping = false
+end)
+
+-- Get All Slaps Logik
+SlapButton.MouseButton1Click:Connect(function()
+    if IsGettingSlaps or not Character or not RootPart then return end
+    IsGettingSlaps = true
+    local originalCFrame = RootPart.CFrame
+    
+    SlapButton.BackgroundColor3 = Color3.fromRGB(200, 120, 30)
+    SlapButton.Text = "getting slaps..."
+    
+    for _, pos in ipairs(SlapPositions) do
+        if Character and RootPart then
+            RootPart.CFrame = CFrame.new(pos)
+            task.wait(0.2)
+        end
+    end
+    
+    if Character and RootPart then
+        RootPart.CFrame = originalCFrame
+    end
+    
+    SlapButton.BackgroundColor3 = Color3.fromRGB(180, 40, 50)
+    SlapButton.Text = "get all slaps"
+    IsGettingSlaps = false
+end)
+
+-- Anti Knockback Loop
+RunService.RenderStepped:Connect(function()
+    if not AntiKnockbackEnabled or not RootPart or not Humanoid or Humanoid.Health <= 0 then return end
+    local velocity = RootPart.AssemblyLinearVelocity
+    local horizontalSpeed = Vector3.new(velocity.X, 0, velocity.Z).Magnitude
+    local state = Humanoid:GetState()
+    
+    if state == Enum.HumanoidStateType.Ragdoll or state == Enum.HumanoidStateType.FallingDown or state == Enum.HumanoidStateType.Physics or state == Enum.HumanoidStateType.PlatformStanding then
+        Humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
+    end
+    
+    if horizontalSpeed > math.max(65, CustomWalkspeed + 25) then
+        RootPart.AssemblyLinearVelocity = Vector3.zero
+        RootPart.AssemblyAngularVelocity = Vector3.zero
+        if LastSafeCFrame then
+            RootPart.CFrame = LastSafeCFrame
+        end
+    elseif horizontalSpeed <= math.max(65, CustomWalkspeed + 25) and not (LastJumpPressed or Humanoid.Jump) then
+        LastSafeCFrame = RootPart.CFrame
+    end
+end)
+
+KnockbackButton.MouseButton1Click:Connect(function()
+    AntiKnockbackEnabled = not AntiKnockbackEnabled
+    KnockbackButton.Text = AntiKnockbackEnabled and "anti knockback: on" or "anti knockback: off"
+    KnockbackButton.BackgroundColor3 = AntiKnockbackEnabled and Color3.fromRGB(40, 160, 70) or Color3.fromRGB(35, 35, 45)
+    if AntiKnockbackEnabled and RootPart then
+        LastSafeCFrame = RootPart.CFrame
+    end
+end)
+
+-- Airwalk Loop
+RunService.Heartbeat:Connect(function()
+    if not AirwalkEnabled or not RootPart or not Humanoid or Humanoid.Health <= 0 then
+        RemoveAirwalkPlatform()
+        return
+    end
+    if not AirwalkPlatform or not AirwalkPlatform.Parent then
+        MakeAirwalkPlatform()
+    end
+    AirwalkPlatform.CanCollide = true
+    AirwalkPlatform.CFrame = CFrame.new(RootPart.Position.X, AirwalkHeight, RootPart.Position.Z)
+end)
+
+AirwalkButton.MouseButton1Click:Connect(function()
+    AirwalkEnabled = not AirwalkEnabled
+    AirwalkButton.Text = AirwalkEnabled and "airwalk: on" or "airwalk: off"
+    AirwalkButton.BackgroundColor3 = AirwalkEnabled and Color3.fromRGB(40, 160, 70) or Color3.fromRGB(35, 35, 45)
+    
+    if AirwalkEnabled and RootPart then
+        local rayParams = RaycastParams.new()
+        rayParams.FilterDescendantsInstances = {Character, AirwalkPlatform}
+        rayParams.FilterType = Enum.RaycastFilterType.Exclude
+        local rayResult = workspace:Raycast(RootPart.Position, Vector3.new(0, -10, 0), rayParams)
+        AirwalkHeight = rayResult and (rayResult.Position.Y - 0.5) or (RootPart.Position.Y - 3.2)
+    else
+        RemoveAirwalkPlatform()
+    end
+end)
+
+-- Infinite Jump
+UserInputService.JumpRequest:Connect(function()
+    if InfiniteJumpEnabled and Humanoid and Humanoid.Health > 0 then
+        Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+    end
+end)
+
+JumpButton.MouseButton1Click:Connect(function()
+    InfiniteJumpEnabled = not InfiniteJumpEnabled
+    JumpButton.Text = InfiniteJumpEnabled and "infinite jump: on" or "infinite jump: off"
+    JumpButton.BackgroundColor3 = InfiniteJumpEnabled and Color3.fromRGB(40, 160, 70) or Color3.fromRGB(35, 35, 45)
+end)
+
+-- Noclip Loop
+RunService.Stepped:Connect(function()
+    if NoclipEnabled and Character then
+        for _, part in ipairs(Character:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.CanCollide = false
+            end
+        end
+    end
+end)
+
+NoclipButton.MouseButton1Click:Connect(function()
+    NoclipEnabled = not NoclipEnabled
+    NoclipButton.Text = NoclipEnabled and "noclip: on" or "noclip: off"
+    NoclipButton.BackgroundColor3 = NoclipEnabled and Color3.fromRGB(40, 160, 70) or Color3.fromRGB(35, 35, 45)
+    
+    if not NoclipEnabled and Character then
+        for _, part in ipairs(Character:GetDescendants()) do
+            if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+                part.CanCollide = true
+            end
+        end
+    end
+end)
+
+-- ESP & Script-User Check
+local function IsUserRegistered(username)
+    for _, name in ipairs(RegisteredUsers) do
+        if name:lower() == username:lower() then
+            return true
+        end
+    end
+    return false
+end
+
+local function ApplyESP(plr)
+    local function SetupHighlight(ch)
+        if not ch then return end
+        if ch:FindFirstChild("ScriptUserHighlight") then ch.ScriptUserHighlight:Destroy() end
+        if ch:FindFirstChild("ScriptUserTag") then ch.ScriptUserTag:Destroy() end
+        
+        local isOwner = (plr.Name == "J3rryKidd")
+        
+        if isOwner or IsUserRegistered(plr.Name) then
+            local hrp = ch:WaitForChild("HumanoidRootPart", 5)
+            if not hrp then return end
+            
+            local highlight = Instance.new("Highlight")
+            highlight.Name = "ScriptUserHighlight"
+            highlight.FillColor = isOwner and Color3.fromHSV(0, 1, 1) or Color3.fromRGB(255, 0, 75)
+            highlight.OutlineColor = isOwner and Color3.fromHSV(0, 1, 1) or Color3.fromRGB(255, 255, 255)
+            highlight.FillTransparency = 0.5
+            highlight.OutlineTransparency = 0
+            highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+            highlight.Parent = ch
+            
+            local billboard = Instance.new("BillboardGui")
+            billboard.Name = "ScriptUserTag"
+            billboard.Adornee = hrp
+            billboard.Size = isOwner and UDim2.new(0, 240, 0, 50) or UDim2.new(0, 180, 0, 30)
+            billboard.StudsOffset = isOwner and Vector3.new(0, 3.8, 0) or Vector3.new(0, 3, 0)
+            billboard.AlwaysOnTop = true
+            billboard.Parent = ch
+            
+            local textLabel = Instance.new("TextLabel")
+            textLabel.Size = UDim2.new(1, 0, 1, 0)
+            textLabel.BackgroundTransparency = 1
+            textLabel.Text = isOwner and "[SCRIPT OWNER] " .. plr.Name or "Also using this script - DONT ATTACK!"
+            textLabel.TextColor3 = isOwner and Color3.fromHSV(0, 1, 1) or Color3.fromRGB(255, 50, 50)
+            textLabel.TextStrokeTransparency = 0
+            textLabel.Font = Enum.Font.SourceSansBold
+            textLabel.TextSize = isOwner and 20 or 14
+            textLabel.Parent = billboard
+            
+            if isOwner then
+                task.spawn(function()
+                    while ch and ch.Parent and highlight and highlight.Parent and textLabel and textLabel.Parent do
+                        local hue = (tick() % 5) / 5
+                        local col = Color3.fromHSV(hue, 1, 1)
+                        highlight.FillColor = col
+                        highlight.OutlineColor = col
+                        textLabel.TextColor3 = col
+                        task.wait(0.03)
+                    end
+                end)
+            end
+        end
+    end
+    
+    if plr.Character then SetupHighlight(plr.Character) end
+    plr.CharacterAdded:Connect(function(ch)
+        task.wait(0.5)
+        SetupHighlight(ch)
+    end)
+end
+
+task.spawn(function()
+    while task.wait(10) do
+        for _, p in ipairs(Players:GetPlayers()) do
+            ApplyESP(p)
+        end
+    end
+end)
+Players.PlayerAdded:Connect(ApplyESP)
+
+local function EnableDragging(frame, handle, ignoredObjects)
+    handle = handle or frame
+    ignoredObjects = ignoredObjects or {}
+
+    local dragging = false
+    local dragStart = nil
+    local startPos = nil
+    local activeInput = nil
+
+    local function isIgnored(obj)
+        for _, ignored in ipairs(ignoredObjects) do
+            if obj == ignored or obj:IsDescendantOf(ignored) then
+                return true
+            end
+        end
+        return false
+    end
+
+    local function stopDrag()
+        if not dragging then return end
+        dragging = false
+        activeInput = nil
+        if frame == MainFrame then
+            LastGuiPosition = frame.Position
+        elseif frame == BubbleButton then
+            LastBubblePosition = frame.Position
+        end
+    end
+
+    local function startDrag(input, source)
+        if isIgnored(source) then return end
+        if input.UserInputType ~= Enum.UserInputType.MouseButton1
+            and input.UserInputType ~= Enum.UserInputType.Touch then
+            return
+        end
+
+        dragging = true
+        activeInput = input
+        dragStart = input.Position
+        startPos = frame.Position
+
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                stopDrag()
+            end
+        end)
+    end
+
+    local function bind(obj)
+        if not obj:IsA("GuiObject") then return end
+        obj.InputBegan:Connect(function(input)
+            startDrag(input, obj)
+        end)
+    end
+
+    bind(handle)
+    for _, obj in ipairs(handle:GetDescendants()) do
+        bind(obj)
+    end
+
+    UserInputService.InputChanged:Connect(function(input)
+        if not dragging or not activeInput then return end
+
+        if input.UserInputType == Enum.UserInputType.MouseMovement
+            or input.UserInputType == Enum.UserInputType.Touch then
+            local delta = input.Position - dragStart
+            frame.Position = UDim2.new(
+                startPos.X.Scale,
+                startPos.X.Offset + delta.X,
+                startPos.Y.Scale,
+                startPos.Y.Offset + delta.Y
+            )
+        end
+    end)
+
+    UserInputService.InputEnded:Connect(function(input)
+        if input == activeInput
+            or input.UserInputType == Enum.UserInputType.MouseButton1
+            or input.UserInputType == Enum.UserInputType.Touch then
+            stopDrag()
+        end
+    end)
+end
+
+local AnnouncementFrame = Instance.new("Frame")
+AnnouncementFrame.Name = "OwnerAnnouncement"
+AnnouncementFrame.AnchorPoint = Vector2.new(0.5, 0)
+AnnouncementFrame.Position = UDim2.new(0.5, 0, 0, 14)
+AnnouncementFrame.Size = UDim2.new(1, -30, 0, IsMobile and 52 or 58)
+AnnouncementFrame.BackgroundColor3 = Color3.fromRGB(28, 26, 45)
+AnnouncementFrame.BackgroundTransparency = 1
+AnnouncementFrame.Visible = false
+AnnouncementFrame.ZIndex = 100
+AnnouncementFrame.Parent = ScreenGui
+ApplyStyle(AnnouncementFrame, 10, Color3.fromRGB(110, 95, 255))
+
+local AnnouncementText = Instance.new("TextLabel")
+AnnouncementText.Size = UDim2.new(1, -20, 1, -10)
+AnnouncementText.Position = UDim2.new(0, 10, 0, 5)
+AnnouncementText.BackgroundTransparency = 1
+AnnouncementText.TextColor3 = Color3.fromRGB(255, 255, 255)
+AnnouncementText.TextTransparency = 1
+AnnouncementText.TextSize = IsMobile and 11 or 13
+AnnouncementText.Font = Enum.Font.GothamBold
+AnnouncementText.TextWrapped = true
+AnnouncementText.ZIndex = 101
+AnnouncementText.Parent = AnnouncementFrame
+
+local AnnouncementToken = 0
+
+local function ShowAnnouncement(data)
+    if type(data) ~= "table" or not data.id or not data.message then
+        return
+    end
+
+    if SeenAnnouncementId == tostring(data.id) then
+        return
+    end
+
+    local createdAt = tonumber(data.createdAt) or 0
+    if createdAt > 0 and math.abs(os.time() - createdAt) > 15 then
+        return
+    end
+
+    SeenAnnouncementId = tostring(data.id)
+    AnnouncementToken += 1
+    local token = AnnouncementToken
+
+    AnnouncementText.Text = "Script Owner " .. tostring(data.owner or "J3RRYKIDD") .. ": " .. tostring(data.message)
+
+    AnnouncementFrame.Visible = true
+    AnnouncementFrame.BackgroundTransparency = 1
+    AnnouncementText.TextTransparency = 1
+
+    Tween(
+        AnnouncementFrame,
+        0.35,
+        Enum.EasingStyle.Quad,
+        Enum.EasingDirection.Out,
+        {BackgroundTransparency = 0.05}
+    )
+
+    Tween(
+        AnnouncementText,
+        0.35,
+        Enum.EasingStyle.Quad,
+        Enum.EasingDirection.Out,
+        {TextTransparency = 0}
+    )
+
+    task.delay(15, function()
+        if token ~= AnnouncementToken then
+            return
+        end
+
+        local bgTween = Tween(
+            AnnouncementFrame,
+            0.45,
+            Enum.EasingStyle.Quad,
+            Enum.EasingDirection.Out,
+            {BackgroundTransparency = 1}
+        )
+
+        Tween(
+            AnnouncementText,
+            0.45,
+            Enum.EasingStyle.Quad,
+            Enum.EasingDirection.Out,
+            {TextTransparency = 1}
+        )
+
+        bgTween.Completed:Wait()
+
+        if token == AnnouncementToken then
+            AnnouncementFrame.Visible = false
+        end
+    end)
+end
+
+local function ProcessOwnerCommand(command)
+    if type(command) ~= "table" or not command.type then
+        return
+    end
+
+    if command.type == "kick" then
+        local reason = tostring(command.reason or "Kicked by script owner")
+        LocalPlayer:Kick(reason)
+        return
+    end
+
+    if command.type == "bring_server" or command.type == "bring" then
+        local targetJobId = tostring(command.jobId or "")
+
+        if targetJobId == "" then
+            return
+        end
+
+        if targetJobId == tostring(JobId) then
+            if command.type == "bring" and command.position and RootPart then
+                RootPart.CFrame = CFrame.new(
+                    tonumber(command.position.x) or RootPart.Position.X,
+                    tonumber(command.position.y) or RootPart.Position.Y,
+                    tonumber(command.position.z) or RootPart.Position.Z
+                )
+            end
+            return
+        end
+
+        local teleportData = nil
+
+        if command.type == "bring" and command.position then
+            teleportData = {
+                slapTowerOwnerBring = true,
+                x = tonumber(command.position.x) or 0,
+                y = tonumber(command.position.y) or 0,
+                z = tonumber(command.position.z) or 0
+            }
+        end
+
+        pcall(function()
+            TeleportService:TeleportToPlaceInstance(
+                tonumber(command.placeId) or game.PlaceId,
+                targetJobId,
+                LocalPlayer,
+                nil,
+                teleportData
+            )
+        end)
+    end
+end
+
+local function ProcessBackendData()
+    if PendingAnnouncement then
+        ShowAnnouncement(PendingAnnouncement)
+    end
+
+    if PendingCommands and #PendingCommands > 0 then
+        local commands = PendingCommands
+        PendingCommands = {}
+
+        for _, command in ipairs(commands) do
+            ProcessOwnerCommand(command)
+        end
+    end
+end
+
+ProcessBackendData()
+
+task.spawn(function()
+    while ScreenGui.Parent do
+        task.wait(0.5)
+        ProcessBackendData()
+    end
+end)
+
+task.spawn(function()
+    if not IsOwner then
+        return
+    end
+
+    task.wait(1)
+
+    local data = OwnerRequest("owner_users")
+
+    if data and data.success and data.users then
+        RenderOwnerUsers(data.users)
+    end
+end)
+
+task.spawn(function()
+    local ok, teleportData = pcall(function()
+        return TeleportService:GetLocalPlayerTeleportData()
+    end)
+
+    if ok and type(teleportData) == "table" and teleportData.slapTowerOwnerBring then
+        TeleportBringData = teleportData
+
+        for _ = 1, 80 do
+            if RootPart then
+                RootPart.CFrame = CFrame.new(
+                    tonumber(teleportData.x) or RootPart.Position.X,
+                    tonumber(teleportData.y) or RootPart.Position.Y,
+                    tonumber(teleportData.z) or RootPart.Position.Z
+                )
+                break
+            end
+
+            task.wait(0.25)
+        end
+    end
+end)
+
+-- Optional donation prompt shown before the main GUI.
+local DONATION_GAMEPASS_ID = 1976487193
+
+local DonationFrame = Instance.new("Frame")
+DonationFrame.Name = "DonationPrompt"
+DonationFrame.Size = UDim2.new(0, IsMobile and 292 or 360, 0, IsMobile and 235 or 255)
+DonationFrame.Position = UDim2.new(0.5, -(IsMobile and 292 or 360) / 2, 0.5, -(IsMobile and 235 or 255) / 2)
+DonationFrame.BackgroundColor3 = Color3.fromRGB(18, 18, 24)
+DonationFrame.BorderSizePixel = 0
+DonationFrame.ZIndex = 100
+DonationFrame.Parent = ScreenGui
+ApplyStyle(DonationFrame, 12, Color3.fromRGB(110, 95, 255))
+
+local DonationTitle = Instance.new("TextLabel")
+DonationTitle.Size = UDim2.new(1, -24, 0, 34)
+DonationTitle.Position = UDim2.new(0, 12, 0, 14)
+DonationTitle.BackgroundTransparency = 1
+DonationTitle.Text = "Support the script"
+DonationTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+DonationTitle.TextSize = IsMobile and 16 or 18
+DonationTitle.Font = Enum.Font.GothamBold
+DonationTitle.TextXAlignment = Enum.TextXAlignment.Center
+DonationTitle.ZIndex = 101
+DonationTitle.Parent = DonationFrame
+
+local DonationMessage = Instance.new("TextLabel")
+DonationMessage.Size = UDim2.new(1, -32, 0, IsMobile and 82 or 92)
+DonationMessage.Position = UDim2.new(0, 16, 0, 54)
+DonationMessage.BackgroundTransparency = 1
+DonationMessage.Text = "Hey!\nThe script took me very long to make.\nPlease consider to donate and support me ❤️"
+DonationMessage.TextColor3 = Color3.fromRGB(220, 220, 230)
+DonationMessage.TextSize = IsMobile and 12 or 14
+DonationMessage.Font = Enum.Font.Gotham
+DonationMessage.TextWrapped = true
+DonationMessage.TextYAlignment = Enum.TextYAlignment.Center
+DonationMessage.ZIndex = 101
+DonationMessage.Parent = DonationFrame
+
+local DonationYes = Instance.new("TextButton")
+DonationYes.Size = UDim2.new(1, -32, 0, IsMobile and 36 or 40)
+DonationYes.Position = UDim2.new(0, 16, 1, -(IsMobile and 82 or 90))
+DonationYes.BackgroundColor3 = Color3.fromRGB(45, 180, 85)
+DonationYes.Text = "Yes, why not? (It's cheap!)"
+DonationYes.TextColor3 = Color3.fromRGB(255, 255, 255)
+DonationYes.TextSize = IsMobile and 11 or 12
+DonationYes.Font = Enum.Font.GothamBold
+DonationYes.ZIndex = 101
+DonationYes.Parent = DonationFrame
+ApplyStyle(DonationYes, 8)
+
+local DonationNo = Instance.new("TextButton")
+DonationNo.Size = UDim2.new(1, -32, 0, IsMobile and 36 or 40)
+DonationNo.Position = UDim2.new(0, 16, 1, -(IsMobile and 42 or 46))
+DonationNo.BackgroundColor3 = Color3.fromRGB(190, 45, 60)
+DonationNo.Text = "No, thanks"
+DonationNo.TextColor3 = Color3.fromRGB(255, 255, 255)
+DonationNo.TextSize = IsMobile and 11 or 12
+DonationNo.Font = Enum.Font.GothamBold
+DonationNo.ZIndex = 101
+DonationNo.Parent = DonationFrame
+ApplyStyle(DonationNo, 8)
+
+local DonationShown = true
+local DonationFinished = false
+
+local function OpenMainAfterDonation()
+    if DonationFinished then
+        return
+    end
+
+    DonationFinished = true
+    DonationShown = false
+    DonationFrame.Visible = false
+    MainFrame.Visible = true
+    BubbleButton.Visible = false
+    GuiOpen = true
+    MainFrame.Position = LastGuiPosition
+    GuiScale.Scale = 0.90
+
+    Tween(
+        GuiScale,
+        0.30,
+        Enum.EasingStyle.Quint,
+        Enum.EasingDirection.Out,
+        {Scale = 1}
+    )
+end
+
+local function ShowDonationThankYou()
+    DonationTitle.Text = "Thank you!"
+    DonationMessage.Text = "Thank you for donating.\nEnjoy the script ❤️"
+    DonationYes.Visible = false
+    DonationNo.Text = "OK"
+    DonationNo.BackgroundColor3 = Color3.fromRGB(45, 180, 85)
+    DonationNo.Position = UDim2.new(0, 16, 1, -(IsMobile and 42 or 46))
+end
+
+DonationNo.Activated:Connect(function()
+    if not DonationShown then
+        return
+    end
+    OpenMainAfterDonation()
+end)
+
+DonationYes.Activated:Connect(function()
+    if not DonationShown then
+        return
+    end
+
+    DonationYes.Text = "Opening Roblox purchase..."
+    DonationYes.AutoButtonColor = false
+
+    local ok = pcall(function()
+        MarketplaceService:PromptGamePassPurchase(LocalPlayer, DONATION_GAMEPASS_ID)
+    end)
+
+    if not ok then
+        DonationYes.Text = "Yes, why not? (It's cheap!)"
+        DonationYes.AutoButtonColor = true
+    end
+end)
+
+MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(player, gamePassId, wasPurchased)
+    if player ~= LocalPlayer or gamePassId ~= DONATION_GAMEPASS_ID or not DonationShown then
+        return
+    end
+
+    if wasPurchased then
+        ShowDonationThankYou()
+    else
+        DonationYes.Text = "Yes, why not? (It's cheap!)"
+        DonationYes.AutoButtonColor = true
+    end
+end)
+
+task.spawn(function()
+    local ownsPass = false
+    local ok = pcall(function()
+        ownsPass = MarketplaceService:UserOwnsGamePassAsync(LocalPlayer.UserId, DONATION_GAMEPASS_ID)
+    end)
+
+    if ok and ownsPass and DonationShown then
+        ShowDonationThankYou()
+    end
+end)
+
+MainFrame.Visible = false
+BubbleButton.Visible = false
+
+-- Only the title/header area drags the main GUI. Interactive controls are excluded.
+EnableDragging(MainFrame, TopBar, {CloseButton, MainTabButton, ServersTabButton, TeleportTabButton, OwnerTabButton})
+
+-- Bubble can be dragged on mouse/touch. A simple click still opens the GUI.
+EnableDragging(BubbleButton, BubbleButton)
