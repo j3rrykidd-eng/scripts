@@ -1,0 +1,3 @@
+game:GetService("Players").LocalPlayer:Kick(
+    "J3rry Hub is gone; i got banned. They added anticheat. Thanks for everyone who used this script ❤️"
+)
